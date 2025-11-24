@@ -10,7 +10,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  const API_URL = 'http://localhost:3001/api'
+  const API_URL = 'https://agendamento-backend-pju8.onrender.com'
 
   const handleChange = (e) => {
     const { name, value } = e.target

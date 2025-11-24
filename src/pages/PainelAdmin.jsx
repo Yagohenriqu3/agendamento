@@ -37,7 +37,7 @@ export default function PainelAdmin() {
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([])
   const navigate = useNavigate()
 
-  const API_URL = 'http://localhost:3001/api'
+  const API_URL = 'https://agendamento-backend-pju8.onrender.com'
 
   useEffect(() => {
     // Verificar se está autenticado e é admin

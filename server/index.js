@@ -7,7 +7,7 @@ import nodemailer from 'nodemailer'
 dotenv.config()
 
 const app = express()
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3000
 
 // Criar pool de conexão MySQL
 const pool = mysql.createPool(process.env.DATABASE_URL)

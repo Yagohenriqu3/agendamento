@@ -9,6 +9,10 @@ dotenv.config()
 const app = express()
 const PORT = process.env.PORT || 3000
 
+app.listen(PORT, () => {
+  console.log("Servidor rodando na porta " + PORT);
+});
+
 // Criar pool de conexão MySQL
 const pool = mysql.createPool(process.env.DATABASE_URL)
 

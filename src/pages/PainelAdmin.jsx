@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 export default function PainelAdmin() {
@@ -55,6 +55,8 @@ export default function PainelAdmin() {
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([])
   const [paginaAtual, setPaginaAtual] = useState(1)
   const agendamentosPorPagina = 15
+  const [menuAberto, setMenuAberto] = useState(false)
+  const [observacoesExpandidas, setObservacoesExpandidas] = useState({})
   const navigate = useNavigate()
 
   const API_URL = 'http://localhost:3001/api'
@@ -808,18 +810,50 @@ export default function PainelAdmin() {
       <div className="container mx-auto px-4 max-w-7xl">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-xl p-4 md:p-6 mb-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-[#6EC1E4]">
-                Painel Administrativo
-              </h1>
-              <p className="text-gray-600 mt-1 text-sm md:text-base">
-                Bem-vindo, {adminNome}
-              </p>
+          <div className="flex justify-between items-center gap-4">
+            <div className="flex items-center gap-3">
+              {/* Botão Hambúrguer (Mobile) */}
+              <button
+                onClick={() => setMenuAberto(!menuAberto)}
+                className="md:hidden text-gray-700 hover:text-[#6EC1E4] transition-colors p-2"
+                aria-label="Menu"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  {menuAberto ? (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  ) : (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 6h16M4 12h16M4 18h16"
+                    />
+                  )}
+                </svg>
+              </button>
+              
+              <div>
+                <h1 className="text-xl md:text-3xl font-bold text-[#6EC1E4]">
+                  Painel Administrativo
+                </h1>
+                <p className="text-gray-600 mt-1 text-xs md:text-base">
+                  Bem-vindo, {adminNome}
+                </p>
+              </div>
             </div>
             <button
               onClick={handleLogout}
-              className="bg-red-500 text-white px-4 md:px-6 py-2 rounded-lg hover:bg-red-600 transition-all font-semibold text-sm md:text-base w-full sm:w-auto"
+              className="bg-red-500 text-white px-3 md:px-6 py-2 rounded-lg hover:bg-red-600 transition-all font-semibold text-xs md:text-base"
             >
               Sair
             </button>
@@ -827,81 +861,213 @@ export default function PainelAdmin() {
         </div>
 
         {/* Abas de Navegação */}
-        <div className="bg-white rounded-2xl shadow-xl mb-6 overflow-x-auto">
-          <div className="flex border-b min-w-max md:min-w-0">
+        {/* Menu de Navegação Principal - Desktop */}
+        <div className="hidden md:block bg-white rounded-2xl shadow-xl mb-6 overflow-hidden">
+          <div className="flex border-b border-gray-100">
             <button
               onClick={() => setAbaAtiva('agendamentos')}
-              className={`flex-1 py-3 md:py-4 px-3 md:px-6 font-semibold transition-all text-sm md:text-base whitespace-nowrap ${
+              className={`flex-1 py-4 px-6 font-semibold transition-all text-base border-b-2 ${
                 abaAtiva === 'agendamentos'
-                  ? 'text-[#6EC1E4] border-b-2 border-[#6EC1E4]'
-                  : 'text-gray-600 hover:text-[#6EC1E4]'
+                  ? 'text-[#6EC1E4] border-[#6EC1E4] bg-blue-50'
+                  : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50 border-transparent'
               }`}
             >
-              Agendamentos
+              📅 Agendamentos
             </button>
             <button
               onClick={() => setAbaAtiva('clientes')}
-              className={`flex-1 py-3 md:py-4 px-3 md:px-6 font-semibold transition-all text-sm md:text-base whitespace-nowrap ${
+              className={`flex-1 py-4 px-6 font-semibold transition-all text-base border-b-2 ${
                 abaAtiva === 'clientes'
-                  ? 'text-[#6EC1E4] border-b-2 border-[#6EC1E4]'
-                  : 'text-gray-600 hover:text-[#6EC1E4]'
+                  ? 'text-[#6EC1E4] border-[#6EC1E4] bg-blue-50'
+                  : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50 border-transparent'
               }`}
             >
-              Clientes
+              👤 Clientes
             </button>
             <button
               onClick={() => setAbaAtiva('administracao')}
-              className={`flex-1 py-3 md:py-4 px-3 md:px-6 font-semibold transition-all text-sm md:text-base whitespace-nowrap ${
+              className={`flex-1 py-4 px-6 font-semibold transition-all text-base border-b-2 ${
                 abaAtiva === 'administracao'
-                  ? 'text-[#6EC1E4] border-b-2 border-[#6EC1E4]'
-                  : 'text-gray-600 hover:text-[#6EC1E4]'
+                  ? 'text-[#6EC1E4] border-[#6EC1E4] bg-blue-50'
+                  : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50 border-transparent'
               }`}
             >
-              Administração
+              ⚙️ Administração
             </button>
           </div>
         </div>
 
-        {/* Sub-abas de Administração */}
+        {/* Menu Hambúrguer - Mobile */}
+        {menuAberto && (
+          <>
+            {/* Overlay transparente para fechar menu ao clicar fora */}
+            <div 
+              className="md:hidden fixed inset-0 z-40" 
+              onClick={() => setMenuAberto(false)}
+            />
+            
+            {/* Menu lateral */}
+            <div className="md:hidden fixed left-0 top-0 bottom-0 z-50 bg-white w-64 shadow-2xl animate-slide-in">
+              <div className="p-4 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-bold text-gray-800">Menu</h2>
+                  <button
+                    onClick={() => setMenuAberto(false)}
+                    className="text-gray-500 hover:text-gray-700 p-1"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-2">
+                <button
+                  onClick={() => {
+                    setAbaAtiva('agendamentos');
+                    setMenuAberto(false);
+                  }}
+                  className={`w-full text-left py-3 px-4 rounded-lg font-semibold transition-all mb-2 ${
+                    abaAtiva === 'agendamentos'
+                      ? 'text-white bg-[#6EC1E4] shadow-md'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  📅 Agendamentos
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setAbaAtiva('clientes');
+                    setMenuAberto(false);
+                  }}
+                  className={`w-full text-left py-3 px-4 rounded-lg font-semibold transition-all mb-2 ${
+                    abaAtiva === 'clientes'
+                      ? 'text-white bg-[#6EC1E4] shadow-md'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  👤 Clientes
+                </button>
+                
+                <div className="mb-2">
+                  <button
+                    onClick={() => setAbaAtiva('administracao')}
+                    className={`w-full text-left py-3 px-4 rounded-lg font-semibold transition-all ${
+                      abaAtiva === 'administracao'
+                        ? 'text-white bg-[#6EC1E4] shadow-md'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    ⚙️ Administração
+                  </button>
+                  
+                  {abaAtiva === 'administracao' && (
+                    <div className="ml-4 mt-2 space-y-1">
+                      <button
+                        onClick={() => {
+                          setSubAbaAdmin('servicos');
+                          setMenuAberto(false);
+                        }}
+                        className={`w-full text-left py-2 px-4 rounded-lg text-sm transition-all ${
+                          subAbaAdmin === 'servicos'
+                            ? 'text-[#6EC1E4] bg-blue-50 font-semibold'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        📋 Serviços
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setSubAbaAdmin('equipe');
+                          setMenuAberto(false);
+                        }}
+                        className={`w-full text-left py-2 px-4 rounded-lg text-sm transition-all ${
+                          subAbaAdmin === 'equipe'
+                            ? 'text-[#6EC1E4] bg-blue-50 font-semibold'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        👥 Equipe
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setSubAbaAdmin('faturamento');
+                          setMenuAberto(false);
+                        }}
+                        className={`w-full text-left py-2 px-4 rounded-lg text-sm transition-all ${
+                          subAbaAdmin === 'faturamento'
+                            ? 'text-[#6EC1E4] bg-blue-50 font-semibold'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        💰 Faturamento
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setSubAbaAdmin('configuracoes');
+                          setMenuAberto(false);
+                        }}
+                        className={`w-full text-left py-2 px-4 rounded-lg text-sm transition-all ${
+                          subAbaAdmin === 'configuracoes'
+                            ? 'text-[#6EC1E4] bg-blue-50 font-semibold'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        ⚙️ Configurações
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Sub-abas de Administração - Desktop */}
         {abaAtiva === 'administracao' && (
-          <div className="bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
-            <div className="flex border-b border-gray-200 overflow-x-auto">
+          <div className="hidden md:block bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
+            <div className="flex border-b border-gray-100">
               <button
                 onClick={() => setSubAbaAdmin('servicos')}
-                className={`flex-1 py-3 px-4 md:px-6 font-medium transition-all text-sm md:text-base whitespace-nowrap ${
+                className={`flex-1 py-3 px-6 font-medium transition-all text-base border-b-2 ${
                   subAbaAdmin === 'servicos'
-                    ? 'text-[#6EC1E4] bg-blue-50 border-b-2 border-[#6EC1E4]'
-                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50'
+                    ? 'text-[#6EC1E4] bg-blue-50 border-[#6EC1E4]'
+                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50 border-transparent'
                 }`}
               >
                 📋 Serviços
               </button>
               <button
                 onClick={() => setSubAbaAdmin('equipe')}
-                className={`flex-1 py-3 px-4 md:px-6 font-medium transition-all text-sm md:text-base whitespace-nowrap ${
+                className={`flex-1 py-3 px-6 font-medium transition-all text-base border-b-2 ${
                   subAbaAdmin === 'equipe'
-                    ? 'text-[#6EC1E4] bg-blue-50 border-b-2 border-[#6EC1E4]'
-                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50'
+                    ? 'text-[#6EC1E4] bg-blue-50 border-[#6EC1E4]'
+                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50 border-transparent'
                 }`}
               >
                 👥 Equipe
               </button>
               <button
                 onClick={() => setSubAbaAdmin('faturamento')}
-                className={`flex-1 py-3 px-4 md:px-6 font-medium transition-all text-sm md:text-base whitespace-nowrap ${
+                className={`flex-1 py-3 px-6 font-medium transition-all text-base border-b-2 ${
                   subAbaAdmin === 'faturamento'
-                    ? 'text-[#6EC1E4] bg-blue-50 border-b-2 border-[#6EC1E4]'
-                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50'
+                    ? 'text-[#6EC1E4] bg-blue-50 border-[#6EC1E4]'
+                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50 border-transparent'
                 }`}
               >
                 💰 Faturamento
               </button>
               <button
                 onClick={() => setSubAbaAdmin('configuracoes')}
-                className={`flex-1 py-3 px-4 md:px-6 font-medium transition-all text-sm md:text-base whitespace-nowrap ${
+                className={`flex-1 py-3 px-6 font-medium transition-all text-base border-b-2 ${
                   subAbaAdmin === 'configuracoes'
-                    ? 'text-[#6EC1E4] bg-blue-50 border-b-2 border-[#6EC1E4]'
-                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50'
+                    ? 'text-[#6EC1E4] bg-blue-50 border-[#6EC1E4]'
+                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50 border-transparent'
                 }`}
               >
                 ⚙️ Configurações
@@ -975,11 +1141,27 @@ export default function PainelAdmin() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Data</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Data {configuracoes.dias_antecedencia_max && (
+                          <span className="text-xs text-gray-500 font-normal">
+                            (até {configuracoes.dias_antecedencia_max} dias de antecedência)
+                          </span>
+                        )}
+                      </label>
                       <input
                         type="date"
                         required
-                        min={new Date().toISOString().split('T')[0]}
+                        min={(() => {
+                          const amanha = new Date()
+                          amanha.setDate(amanha.getDate() + 1)
+                          return amanha.toISOString().split('T')[0]
+                        })()}
+                        max={(() => {
+                          const hoje = new Date()
+                          const diasMax = configuracoes.dias_antecedencia_max || 30
+                          hoje.setDate(hoje.getDate() + diasMax)
+                          return hoje.toISOString().split('T')[0]
+                        })()}
                         value={formAgendamento.data}
                         onChange={(e) => {
                           const data = e.target.value
@@ -1063,11 +1245,27 @@ export default function PainelAdmin() {
                   <form onSubmit={handleReagendar} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Nova Data</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Nova Data {configuracoes.dias_antecedencia_max && (
+                            <span className="text-xs text-gray-500 font-normal">
+                              (até {configuracoes.dias_antecedencia_max} dias)
+                            </span>
+                          )}
+                        </label>
                         <input
                           type="date"
                           required
-                          min={new Date().toISOString().split('T')[0]}
+                          min={(() => {
+                            const amanha = new Date()
+                            amanha.setDate(amanha.getDate() + 1)
+                            return amanha.toISOString().split('T')[0]
+                          })()}
+                          max={(() => {
+                            const hoje = new Date()
+                            const diasMax = configuracoes.dias_antecedencia_max || 30
+                            hoje.setDate(hoje.getDate() + diasMax)
+                            return hoje.toISOString().split('T')[0]
+                          })()}
                           value={formAgendamento.data}
                           onChange={(e) => {
                             const data = e.target.value
@@ -1354,107 +1552,136 @@ export default function PainelAdmin() {
                     {agendamentos
                       .slice((paginaAtual - 1) * agendamentosPorPagina, paginaAtual * agendamentosPorPagina)
                       .map((agendamento) => (
-                      <tr key={agendamento.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-4 text-sm">
-                          <div className="font-medium text-gray-900">{formatarData(agendamento.data)}</div>
-                          <div className="text-gray-600">{agendamento.horario}</div>
-                        </td>
-                        <td className="px-4 py-4 text-sm">
-                          <div className="font-medium text-gray-900">{agendamento.clienteNome}</div>
-                          <div className="text-gray-600 text-xs">{agendamento.clienteEmail}</div>
-                          <div className="text-gray-400 text-xs">{agendamento.telefone || 'N/A'}</div>
-                        </td>
-                        <td className="px-4 py-4 text-sm text-gray-900">
-                          <div className="flex items-center gap-2">
-                            <span>{agendamento.servicoNome}</span>
-                            {agendamento.anotacao && agendamento.anotacao.includes('Agendamento combinado') && (
-                              <button
-                                onClick={() => setDetalhesServicosModal(agendamento)}
-                                className="text-[#6EC1E4] hover:text-[#5ab0d3] font-semibold text-xs bg-blue-50 px-2 py-1 rounded"
-                                title="Ver todos os serviços"
-                              >
-                                +Múltiplos 🔍
-                              </button>
+                      <React.Fragment key={agendamento.id}>
+                        <tr className="hover:bg-gray-50">
+                          <td className="px-4 py-4 text-sm">
+                            <div className="font-medium text-gray-900">{formatarData(agendamento.data)}</div>
+                            <div className="text-gray-600">{agendamento.horario}</div>
+                          </td>
+                          <td className="px-4 py-4 text-sm">
+                            <div className="font-medium text-gray-900">{agendamento.clienteNome}</div>
+                            <div className="text-gray-600 text-xs">{agendamento.clienteEmail}</div>
+                            <div className="text-gray-400 text-xs">{agendamento.telefone || 'N/A'}</div>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-900">
+                            <div className="flex items-center gap-2">
+                              <span>{agendamento.servicoNome}</span>
+                              {agendamento.anotacao && agendamento.anotacao.includes('Agendamento combinado') && (
+                                <button
+                                  onClick={() => setDetalhesServicosModal(agendamento)}
+                                  className="text-[#6EC1E4] hover:text-[#5ab0d3] font-semibold text-xs bg-blue-50 px-2 py-1 rounded"
+                                  title="Ver todos os serviços"
+                                >
+                                  +Múltiplos 🔍
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-sm">
+                            {editandoValor === agendamento.id ? (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  defaultValue={agendamento.servicoPreco}
+                                  id={`valor-${agendamento.id}`}
+                                  className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                                />
+                                <button
+                                  onClick={() => {
+                                    const novoValor = document.getElementById(`valor-${agendamento.id}`).value
+                                    handleEditarValor(agendamento.id, novoValor)
+                                  }}
+                                  className="text-green-600 hover:text-green-800 font-semibold text-xs"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  onClick={() => setEditandoValor(null)}
+                                  className="text-red-600 hover:text-red-800 font-semibold text-xs"
+                                >
+                                  ✗
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-900">R$ {agendamento.servicoPreco?.toFixed(2)}</span>
+                                <button
+                                  onClick={() => setEditandoValor(agendamento.id)}
+                                  className="text-[#6EC1E4] hover:text-[#5ab0d3] text-xs"
+                                >
+                                  ✏️
+                                </button>
+                              </div>
                             )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-sm">
-                          {editandoValor === agendamento.id ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                step="0.01"
-                                defaultValue={agendamento.servicoPreco}
-                                id={`valor-${agendamento.id}`}
-                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
-                              />
-                              <button
-                                onClick={() => {
-                                  const novoValor = document.getElementById(`valor-${agendamento.id}`).value
-                                  handleEditarValor(agendamento.id, novoValor)
-                                }}
-                                className="text-green-600 hover:text-green-800 font-semibold text-xs"
-                              >
-                                ✓
-                              </button>
-                              <button
-                                onClick={() => setEditandoValor(null)}
-                                className="text-red-600 hover:text-red-800 font-semibold text-xs"
-                              >
-                                ✗
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-900">R$ {agendamento.servicoPreco?.toFixed(2)}</span>
-                              <button
-                                onClick={() => setEditandoValor(agendamento.id)}
-                                className="text-[#6EC1E4] hover:text-[#5ab0d3] text-xs"
-                              >
-                                ✏️
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(agendamento.status)}`}>
-                            {agendamento.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          {(agendamento.status === 'concluido' || agendamento.status === 'cancelado') ? (
-                            <span className="text-sm text-gray-400 italic">Sem ações</span>
-                          ) : (
-                            <select
-                              onChange={(e) => {
-                                const acao = e.target.value
-                                if (acao === 'confirmar') handleConfirmarPendente(agendamento.id)
-                                else if (acao === 'concluir') handleConcluir(agendamento.id)
-                                else if (acao === 'reagendar') iniciarReagendamento(agendamento)
-                                else if (acao === 'cancelar') handleCancelar(agendamento.id)
-                                e.target.value = ''
-                              }}
-                              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent bg-white"
-                            >
-                              <option value="">Ações...</option>
-                              {agendamento.status === 'pendente' && (
-                                <>
-                                  <option value="confirmar">✅ Confirmar</option>
-                                  <option value="reagendar">📅 Reagendar</option>
-                                  <option value="cancelar">❌ Cancelar</option>
-                                </>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(agendamento.status)}`}>
+                              {agendamento.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-col gap-2">
+                              {(agendamento.status === 'concluido' || agendamento.status === 'cancelado') ? (
+                                <span className="text-sm text-gray-400 italic">Sem ações</span>
+                              ) : (
+                                <select
+                                  onChange={(e) => {
+                                    const acao = e.target.value
+                                    if (acao === 'confirmar') handleConfirmarPendente(agendamento.id)
+                                    else if (acao === 'concluir') handleConcluir(agendamento.id)
+                                    else if (acao === 'reagendar') iniciarReagendamento(agendamento)
+                                    else if (acao === 'cancelar') handleCancelar(agendamento.id)
+                                    e.target.value = ''
+                                  }}
+                                  className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent bg-white"
+                                >
+                                  <option value="">Ações...</option>
+                                  {agendamento.status === 'pendente' && (
+                                    <>
+                                      <option value="confirmar">✅ Confirmar</option>
+                                      <option value="reagendar">📅 Reagendar</option>
+                                      <option value="cancelar">❌ Cancelar</option>
+                                    </>
+                                  )}
+                                  {agendamento.status === 'confirmado' && (
+                                    <>
+                                      <option value="concluir">✓ Concluir</option>
+                                      <option value="reagendar">📅 Reagendar</option>
+                                      <option value="cancelar">❌ Cancelar</option>
+                                    </>
+                                  )}
+                                </select>
                               )}
-                              {agendamento.status === 'confirmado' && (
-                                <>
-                                  <option value="concluir">✓ Concluir</option>
-                                  <option value="reagendar">📅 Reagendar</option>
-                                  <option value="cancelar">❌ Cancelar</option>
-                                </>
+                              
+                              {/* Botão Ver Observações */}
+                              {agendamento.observacoes && (
+                                <button
+                                  onClick={() => setObservacoesExpandidas(prev => ({
+                                    ...prev,
+                                    [agendamento.id]: !prev[agendamento.id]
+                                  }))}
+                                  className="text-xs text-[#6EC1E4] hover:text-[#5ab0d3] font-semibold flex items-center gap-1"
+                                >
+                                  {observacoesExpandidas[agendamento.id] ? '▼' : '▶'} Ver observações
+                                </button>
                               )}
-                            </select>
-                          )}
-                        </td>
-                      </tr>
+                            </div>
+                          </td>
+                        </tr>
+                        
+                        {/* Linha expandida com observações */}
+                        {observacoesExpandidas[agendamento.id] && agendamento.observacoes && (
+                          <tr>
+                            <td colSpan="6" className="px-4 py-3 bg-blue-50 border-l-4 border-[#6EC1E4]">
+                              <div className="text-sm">
+                                <span className="font-semibold text-gray-700">Observações do cliente:</span>
+                                <p className="text-gray-600 mt-1">{agendamento.observacoes}</p>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -1576,6 +1803,29 @@ export default function PainelAdmin() {
                           )}
                         </select>
                       )}
+                      
+                      {/* Botão Ver Observações Mobile */}
+                      {agendamento.observacoes && (
+                        <div className="mt-3">
+                          <button
+                            onClick={() => setObservacoesExpandidas(prev => ({
+                              ...prev,
+                              [agendamento.id]: !prev[agendamento.id]
+                            }))}
+                            className="w-full text-sm text-[#6EC1E4] hover:text-[#5ab0d3] font-semibold flex items-center justify-center gap-2 py-2 border border-[#6EC1E4] rounded-lg hover:bg-blue-50 transition-all"
+                          >
+                            {observacoesExpandidas[agendamento.id] ? '▼ Ocultar observações' : '▶ Ver observações'}
+                          </button>
+                          
+                          {/* Observações expandidas */}
+                          {observacoesExpandidas[agendamento.id] && (
+                            <div className="mt-2 p-3 bg-blue-50 rounded-lg border-l-4 border-[#6EC1E4]">
+                              <span className="font-semibold text-gray-700 text-sm">Observações:</span>
+                              <p className="text-gray-600 text-sm mt-1">{agendamento.observacoes}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
               </div>
@@ -1586,45 +1836,61 @@ export default function PainelAdmin() {
           {agendamentos.length > agendamentosPorPagina && (
             <div className="px-4 py-4 border-t border-gray-200 bg-gray-50">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-sm text-gray-700">
-                  Mostrando {Math.min((paginaAtual - 1) * agendamentosPorPagina + 1, agendamentos.length)} até {Math.min(paginaAtual * agendamentosPorPagina, agendamentos.length)} de {agendamentos.length} agendamentos
+                {/* Contador de registros */}
+                <div className="text-xs sm:text-sm text-gray-700 text-center sm:text-left">
+                  <span className="hidden sm:inline">
+                    Mostrando {Math.min((paginaAtual - 1) * agendamentosPorPagina + 1, agendamentos.length)} até {Math.min(paginaAtual * agendamentosPorPagina, agendamentos.length)} de {agendamentos.length} agendamentos
+                  </span>
+                  <span className="sm:hidden">
+                    {Math.min((paginaAtual - 1) * agendamentosPorPagina + 1, agendamentos.length)}-{Math.min(paginaAtual * agendamentosPorPagina, agendamentos.length)} de {agendamentos.length}
+                  </span>
                 </div>
                 
-                <div className="flex items-center gap-2">
+                {/* Controles de paginação */}
+                <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
+                  {/* Botão Primeira (oculto em mobile) */}
                   <button
                     onClick={() => setPaginaAtual(1)}
                     disabled={paginaAtual === 1}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="hidden sm:inline-flex px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     Primeira
                   </button>
                   
+                  {/* Botão Anterior */}
                   <button
                     onClick={() => setPaginaAtual(prev => Math.max(prev - 1, 1))}
                     disabled={paginaAtual === 1}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
-                    ← Anterior
+                    <span className="sm:hidden">←</span>
+                    <span className="hidden sm:inline">← Anterior</span>
                   </button>
 
+                  {/* Números das páginas */}
                   <div className="flex items-center gap-1">
                     {Array.from({ length: Math.ceil(agendamentos.length / agendamentosPorPagina) }, (_, i) => i + 1)
                       .filter(page => {
-                        // Mostrar apenas páginas próximas à atual
+                        const totalPages = Math.ceil(agendamentos.length / agendamentosPorPagina)
+                        // Em mobile, mostrar apenas a página atual e adjacentes
+                        if (window.innerWidth < 640) {
+                          return Math.abs(page - paginaAtual) <= 1
+                        }
+                        // Em desktop, mostrar primeira, última e próximas à atual
                         return page === 1 || 
-                               page === Math.ceil(agendamentos.length / agendamentosPorPagina) || 
+                               page === totalPages || 
                                Math.abs(page - paginaAtual) <= 1
                       })
                       .map((page, index, array) => (
                         <div key={page} className="flex items-center">
                           {index > 0 && array[index - 1] !== page - 1 && (
-                            <span className="px-2 text-gray-500">...</span>
+                            <span className="px-1 sm:px-2 text-gray-500 text-xs sm:text-sm">...</span>
                           )}
                           <button
                             onClick={() => setPaginaAtual(page)}
-                            className={`px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                            className={`px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-all ${
                               paginaAtual === page
-                                ? 'bg-[#6EC1E4] text-white'
+                                ? 'bg-[#6EC1E4] text-white shadow-md'
                                 : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-100'
                             }`}
                           >
@@ -1634,18 +1900,21 @@ export default function PainelAdmin() {
                       ))}
                   </div>
 
+                  {/* Botão Próxima */}
                   <button
                     onClick={() => setPaginaAtual(prev => Math.min(prev + 1, Math.ceil(agendamentos.length / agendamentosPorPagina)))}
                     disabled={paginaAtual === Math.ceil(agendamentos.length / agendamentosPorPagina)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
-                    Próxima →
+                    <span className="sm:hidden">→</span>
+                    <span className="hidden sm:inline">Próxima →</span>
                   </button>
 
+                  {/* Botão Última (oculto em mobile) */}
                   <button
                     onClick={() => setPaginaAtual(Math.ceil(agendamentos.length / agendamentosPorPagina))}
                     disabled={paginaAtual === Math.ceil(agendamentos.length / agendamentosPorPagina)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="hidden sm:inline-flex px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     Última
                   </button>
@@ -1655,24 +1924,6 @@ export default function PainelAdmin() {
           )}
         </div>
 
-        {/* Observações */}
-        {agendamentos.some(a => a.observacoes) && (
-          <div className="bg-white rounded-2xl shadow-xl p-6 mt-6">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">Observações dos Clientes</h3>
-            <div className="space-y-3">
-              {agendamentos
-                .filter(a => a.observacoes)
-                .map((agendamento) => (
-                  <div key={agendamento.id} className="border-l-4 border-[#6EC1E4] pl-4 py-2">
-                    <p className="text-sm font-semibold text-gray-700">
-                      {agendamento.clienteNome} - {formatarData(agendamento.data)} às {agendamento.horario}
-                    </p>
-                    <p className="text-sm text-gray-600 mt-1">{agendamento.observacoes}</p>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
           </>
         ) : abaAtiva === 'clientes' ? (
           /* Aba de Clientes */

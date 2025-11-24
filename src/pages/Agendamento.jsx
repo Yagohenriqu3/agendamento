@@ -6,6 +6,10 @@ export default function Agendamento() {
   const [servicos, setServicos] = useState([])
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([])
   const [horariosComVagas, setHorariosComVagas] = useState([])
+  const [configuracoes, setConfiguracoes] = useState({
+    dias_antecedencia_max: 30,
+    dias_funcionamento: ['1','2','3','4','5','6']
+  })
   const [loading, setLoading] = useState(false)
   const [clienteNome, setClienteNome] = useState('')
   const [clienteEmail, setClienteEmail] = useState('')
@@ -35,7 +39,18 @@ export default function Agendamento() {
     setClienteNome(nome)
     setClienteEmail(email)
     carregarServicos()
+    carregarConfiguracoes()
   }, [navigate])
+
+  const carregarConfiguracoes = async () => {
+    try {
+      const response = await fetch(`${API_URL}/configuracoes/publicas`)
+      const data = await response.json()
+      setConfiguracoes(data)
+    } catch (error) {
+      console.error('Erro ao carregar configurações:', error)
+    }
+  }
 
   useEffect(() => {
     if (formData.data && servicosSelecionados.length > 0) {
@@ -195,6 +210,32 @@ export default function Agendamento() {
     navigate('/login')
   }
 
+  // Calcular data mínima (amanhã) e máxima (baseado na configuração)
+  const calcularDatasPermitidas = () => {
+    const hoje = new Date()
+    const amanha = new Date(hoje)
+    amanha.setDate(amanha.getDate() + 1)
+    
+    const dataMaxima = new Date(hoje)
+    const diasMax = configuracoes.dias_antecedencia_max || 30
+    dataMaxima.setDate(dataMaxima.getDate() + diasMax)
+    
+    return {
+      min: amanha.toISOString().split('T')[0],
+      max: dataMaxima.toISOString().split('T')[0]
+    }
+  }
+
+  const datasPermitidas = calcularDatasPermitidas()
+
+  // Função para validar se a data é permitida (dia da semana)
+  const isDiaPermitido = (dataString) => {
+    const data = new Date(dataString + 'T00:00:00')
+    const diaSemana = data.getDay().toString()
+    const diasFuncionamento = configuracoes.dias_funcionamento || ['1','2','3','4','5','6']
+    return diasFuncionamento.includes(diaSemana)
+  }
+
   // Data mínima é hoje
   const dataMinima = new Date().toISOString().split('T')[0]
 
@@ -302,21 +343,38 @@ export default function Agendamento() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="data" className="block text-gray-700 font-semibold mb-2 text-sm md:text-base">
-                    Data
+                    Data {configuracoes.dias_antecedencia_max && (
+                      <span className="text-xs text-gray-500 font-normal">
+                        (até {configuracoes.dias_antecedencia_max} dias de antecedência)
+                      </span>
+                    )}
                   </label>
                   <input
                     type="date"
                     id="data"
                     name="data"
                     value={formData.data}
-                    onChange={handleChange}
-                    min={dataMinima}
+                    onChange={(e) => {
+                      const novadata = e.target.value
+                      // Validar se é dia permitido
+                      if (novadata && !isDiaPermitido(novadata)) {
+                        alert('A empresa não funciona neste dia da semana. Por favor, selecione outro dia.')
+                        return
+                      }
+                      handleChange(e)
+                    }}
+                    min={datasPermitidas.min}
+                    max={datasPermitidas.max}
                     required
                     disabled={servicosSelecionados.length === 0}
                     className="w-full px-3 md:px-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] transition-all disabled:bg-gray-100 disabled:cursor-not-allowed text-sm md:text-base"
                   />
-                  {servicosSelecionados.length === 0 && (
+                  {servicosSelecionados.length === 0 ? (
                     <p className="text-xs text-gray-500 mt-1">Adicione pelo menos um serviço primeiro</p>
+                  ) : (
+                    <p className="text-xs text-blue-600 mt-1">
+                      📅 Datas disponíveis: {new Date(datasPermitidas.min).toLocaleDateString('pt-BR')} até {new Date(datasPermitidas.max).toLocaleDateString('pt-BR')}
+                    </p>
                   )}
                 </div>
 

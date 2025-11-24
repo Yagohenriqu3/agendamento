@@ -5,18 +5,20 @@ import NavMenu from '../componentes/NavMenu'
 export default function Agendamento() {
   const [servicos, setServicos] = useState([])
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([])
+  const [horariosComVagas, setHorariosComVagas] = useState([])
   const [loading, setLoading] = useState(false)
   const [clienteNome, setClienteNome] = useState('')
   const [clienteEmail, setClienteEmail] = useState('')
   const navigate = useNavigate()
   const [formData, setFormData] = useState({
-    servicoId: '',
+    servicosIds: [],
     data: '',
     horario: '',
     observacoes: ''
   })
+  const [servicosSelecionados, setServicosSelecionados] = useState([])
 
-  const API_URL = 'https://agendamento-backend-pju8.onrender.com'
+  const API_URL = 'http://localhost:3001/api'
 
   useEffect(() => {
     // Verificar se o cliente está logado
@@ -36,10 +38,12 @@ export default function Agendamento() {
   }, [navigate])
 
   useEffect(() => {
-    if (formData.data) {
+    if (formData.data && servicosSelecionados.length > 0) {
       carregarHorariosDisponiveis()
+    } else {
+      setHorariosDisponiveis([])
     }
-  }, [formData.data])
+  }, [formData.data, servicosSelecionados])
 
   const carregarServicos = async () => {
     try {
@@ -55,9 +59,32 @@ export default function Agendamento() {
   const carregarHorariosDisponiveis = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_URL}/horarios-disponiveis?data=${formData.data}`)
+      
+      // Calcular duração total dos serviços selecionados
+      const duracaoTotal = servicosSelecionados.reduce((total, s) => total + s.duracao, 0)
+      
+      console.log('Serviços selecionados:', servicosSelecionados)
+      console.log('Duração total calculada:', duracaoTotal)
+      
+      if (duracaoTotal === 0) {
+        console.warn('Duração total é 0, serviços podem não ter duração definida')
+        setHorariosDisponiveis([])
+        setHorariosComVagas([])
+        return
+      }
+      
+      // Pegar o primeiro serviço para buscar colaboradores
+      const primeiroServicoId = servicosSelecionados[0]?.id
+      
+      const url = `${API_URL}/horarios-disponiveis?data=${formData.data}&duracaoTotal=${duracaoTotal}${primeiroServicoId ? `&servicoId=${primeiroServicoId}` : ''}`
+      console.log('URL de busca:', url)
+      
+      const response = await fetch(url)
       const data = await response.json()
+      console.log('Horários disponíveis recebidos:', data.horariosDisponiveis)
+      console.log('Horários com vagas:', data.horariosComVagas)
       setHorariosDisponiveis(data.horariosDisponiveis || [])
+      setHorariosComVagas(data.horariosComVagas || [])
     } catch (error) {
       console.error('Erro ao carregar horários:', error)
       alert('Erro ao carregar horários disponíveis')
@@ -66,12 +93,44 @@ export default function Agendamento() {
     }
   }
 
-  const handleChange = (e) => {
-    const { name, value } = e.target
+  const handleAdicionarServico = (servicoId) => {
+    const servico = servicos.find(s => s.id === parseInt(servicoId))
+    if (servico && !servicosSelecionados.find(s => s.id === servico.id)) {
+      const novosServicos = [...servicosSelecionados, servico]
+      setServicosSelecionados(novosServicos)
+      setFormData(prev => ({
+        ...prev,
+        servicosIds: novosServicos.map(s => s.id),
+        horario: '' // Limpar horário ao mudar serviços
+      }))
+    }
+  }
+
+  const handleRemoverServico = (servicoId) => {
+    const novosServicos = servicosSelecionados.filter(s => s.id !== servicoId)
+    setServicosSelecionados(novosServicos)
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      servicosIds: novosServicos.map(s => s.id),
+      horario: '' // Limpar horário ao mudar serviços
     }))
+  }
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [name]: value
+      }
+      
+      // Limpar horário quando trocar data
+      if (name === 'data') {
+        newData.horario = ''
+      }
+      
+      return newData
+    })
   }
 
   const handleSubmit = async (e) => {
@@ -89,7 +148,7 @@ export default function Agendamento() {
         nome: clienteNome,
         email: clienteEmail,
         telefone: clienteData.telefone || '(00) 00000-0000',
-        servicoId: formData.servicoId,
+        servicosIds: formData.servicosIds,
         data: formData.data,
         horario: formData.horario,
         observacoes: formData.observacoes
@@ -113,11 +172,12 @@ export default function Agendamento() {
       
       // Limpar formulário
       setFormData({
-        servicoId: '',
+        servicosIds: [],
         data: '',
         horario: '',
         observacoes: ''
       })
+      setServicosSelecionados([])
       setHorariosDisponiveis([])
       
     } catch (error) {
@@ -162,26 +222,82 @@ export default function Agendamento() {
           
           <div className="bg-white rounded-2xl shadow-xl p-4 md:p-8">
             <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+              {/* Seleção de Serviços */}
               <div>
-                <label htmlFor="servicoId" className="block text-gray-700 font-semibold mb-2 text-sm md:text-base">
-                  Serviço Desejado
+                <label className="block text-gray-700 font-semibold mb-2 text-sm md:text-base">
+                  Serviços Desejados
                 </label>
-                <select
-                  id="servicoId"
-                  name="servicoId"
-                  value={formData.servicoId}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 md:px-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] transition-all text-sm md:text-base"
-                >
-                  <option value="">Selecione um serviço</option>
-                  {servicos.map(servico => (
-                    <option key={servico.id} value={servico.id}>
-                      {servico.nome} - R$ {servico.preco?.toFixed(2)} ({servico.duracao} min)
-                    </option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    id="servicoSelect"
+                    className="flex-1 px-3 md:px-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] transition-all text-sm md:text-base"
+                  >
+                    <option value="">Selecione um serviço para adicionar</option>
+                    {servicos
+                      .filter(s => !servicosSelecionados.find(sel => sel.id === s.id))
+                      .map(servico => (
+                        <option key={servico.id} value={servico.id}>
+                          {servico.nome} - R$ {servico.preco?.toFixed(2)} ({servico.duracao} min)
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const select = document.getElementById('servicoSelect')
+                      if (select.value) {
+                        handleAdicionarServico(select.value)
+                        select.value = ''
+                      }
+                    }}
+                    className="px-4 py-2 bg-[#6EC1E4] text-white rounded-lg hover:bg-[#5ab0d3] transition-all font-semibold text-sm"
+                  >
+                    + Adicionar
+                  </button>
+                </div>
               </div>
+
+              {/* Lista de Serviços Selecionados */}
+              {servicosSelecionados.length > 0 && (
+                <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+                  <h3 className="font-semibold text-gray-800 mb-3 text-sm md:text-base">
+                    Serviços Selecionados ({servicosSelecionados.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {servicosSelecionados.map((servico) => (
+                      <div key={servico.id} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-800 text-sm md:text-base">{servico.nome}</p>
+                          <p className="text-xs md:text-sm text-gray-600">
+                            R$ {servico.preco?.toFixed(2)} • {servico.duracao} minutos
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverServico(servico.id)}
+                          className="ml-3 text-red-600 hover:text-red-800 font-semibold text-sm"
+                        >
+                          ✕ Remover
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-blue-300">
+                    <div className="flex justify-between text-sm md:text-base">
+                      <span className="font-semibold text-gray-700">Duração Total:</span>
+                      <span className="font-bold text-[#6EC1E4]">
+                        {servicosSelecionados.reduce((total, s) => total + s.duracao, 0)} minutos
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm md:text-base mt-1">
+                      <span className="font-semibold text-gray-700">Valor Total:</span>
+                      <span className="font-bold text-green-600">
+                        R$ {servicosSelecionados.reduce((total, s) => total + s.preco, 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -196,35 +312,63 @@ export default function Agendamento() {
                     onChange={handleChange}
                     min={dataMinima}
                     required
-                    className="w-full px-3 md:px-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] transition-all text-sm md:text-base"
+                    disabled={servicosSelecionados.length === 0}
+                    className="w-full px-3 md:px-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] transition-all disabled:bg-gray-100 disabled:cursor-not-allowed text-sm md:text-base"
                   />
+                  {servicosSelecionados.length === 0 && (
+                    <p className="text-xs text-gray-500 mt-1">Adicione pelo menos um serviço primeiro</p>
+                  )}
                 </div>
 
                 <div>
                   <label htmlFor="horario" className="block text-gray-700 font-semibold mb-2 text-sm md:text-base">
-                    Horário {loading && '(carregando...)'}
+                    Horário Disponível {loading && '(carregando...)'}
                   </label>
+                  
                   <select
                     id="horario"
                     name="horario"
                     value={formData.horario}
                     onChange={handleChange}
                     required
-                    disabled={!formData.data || loading}
+                    disabled={!formData.data || servicosSelecionados.length === 0 || loading}
                     className="w-full px-3 md:px-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] transition-all disabled:bg-gray-100 disabled:cursor-not-allowed text-sm md:text-base"
                   >
                     <option value="">
-                      {!formData.data ? 'Selecione uma data primeiro' : 
+                      {servicosSelecionados.length === 0 ? 'Adicione serviços primeiro' :
+                       !formData.data ? 'Selecione uma data' : 
                        loading ? 'Carregando horários...' : 
-                       horariosDisponiveis.length === 0 ? 'Sem horários disponíveis' : 
+                       horariosComVagas.length === 0 ? 'Sem horários disponíveis' : 
                        'Selecione um horário'}
                     </option>
-                    {horariosDisponiveis.map(horario => (
-                      <option key={horario} value={horario}>
-                        {horario}
+                    {horariosComVagas.map(item => (
+                      <option key={item.horario} value={item.horario}>
+                        {item.horario} - {item.vagasDisponiveis === 1 ? '1 vaga disponível' : `${item.vagasDisponiveis} vagas disponíveis`}
                       </option>
                     ))}
                   </select>
+
+                  {horariosComVagas.length === 0 && formData.data && servicosSelecionados.length > 0 && !loading && (
+                    <div className="mt-2 p-3 bg-yellow-50 border border-yellow-300 rounded-lg">
+                      <p className="text-xs text-yellow-800 flex items-center gap-2">
+                        <span className="text-lg">⚠️</span>
+                        <span>Sem horários disponíveis para esta data. Verifique se há colaboradores atribuídos aos serviços selecionados na aba Equipe.</span>
+                      </p>
+                    </div>
+                  )}
+
+                  {horariosComVagas.length > 0 && (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-800 flex items-center gap-2">
+                        <span className="text-lg">💡</span>
+                        <span>
+                          {horariosComVagas.some(h => h.vagasDisponiveis > 1) 
+                            ? 'Horários com múltiplas vagas disponíveis! Você será atendido por um dos nossos profissionais qualificados.'
+                            : 'Você será atendido por um dos nossos profissionais qualificados.'}
+                        </span>
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

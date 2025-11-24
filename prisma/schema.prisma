@@ -31,25 +31,58 @@ model Servico {
   ativo     Boolean  @default(true)
   createdAt DateTime @default(now())
   
-  agendamentos Agendamento[]
+  agendamentos          Agendamento[]
+  colaboradorServicos   ColaboradorServico[]
+}
+
+model Colaborador {
+  id            Int      @id @default(autoincrement())
+  nome          String
+  email         String   @unique
+  telefone      String?
+  especialidade String?
+  ativo         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  agendamentos        Agendamento[]
+  colaboradorServicos ColaboradorServico[]
+}
+
+model ColaboradorServico {
+  id            Int      @id @default(autoincrement())
+  colaboradorId Int
+  servicoId     Int
+  
+  colaborador Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  servico     Servico     @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+  
+  @@unique([colaboradorId, servicoId])
+  @@index([colaboradorId])
+  @@index([servicoId])
 }
 
 model Agendamento {
-  id          Int      @id @default(autoincrement())
-  clienteId   Int
-  servicoId   Int
-  data        DateTime
-  horario     String   // formato HH:mm
-  observacoes String?  @db.Text
-  status      String   @default("confirmado") // confirmado, cancelado, concluido
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  clienteId     Int
+  servicoId     Int
+  colaboradorId Int?     // ID do colaborador atribuído (opcional para compatibilidade)
+  data          DateTime
+  horario       String   // formato HH:mm
+  observacoes   String?  @db.Text
+  valorCobrado  Float?   // Valor cobrado neste agendamento específico
+  duracaoTotal  Int?     // Duração total quando múltiplos serviços
+  status        String   @default("confirmado") // confirmado, cancelado, concluido, pendente
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   
-  cliente Cliente @relation(fields: [clienteId], references: [id])
-  servico Servico @relation(fields: [servicoId], references: [id])
+  cliente     Cliente      @relation(fields: [clienteId], references: [id])
+  servico     Servico      @relation(fields: [servicoId], references: [id])
+  colaborador Colaborador? @relation(fields: [colaboradorId], references: [id])
   
-  @@unique([data, horario])
+  @@unique([data, horario, colaboradorId])
   @@index([data])
   @@index([clienteId])
   @@index([servicoId])
+  @@index([colaboradorId])
 }

@@ -7,11 +7,7 @@ import nodemailer from 'nodemailer'
 dotenv.config()
 
 const app = express()
-const PORT = process.env.PORT || 3000
-
-app.listen(PORT, () => {
-  console.log("Servidor rodando na porta " + PORT);
-});
+const PORT = process.env.PORT || 3001
 
 // Criar pool de conexão MySQL
 const pool = mysql.createPool(process.env.DATABASE_URL)
@@ -63,6 +59,52 @@ async function enviarEmail(para, assunto, html) {
 }
 
 // Templates de email
+function emailAgendamentoPendente(nome, data, horario, servico) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #f39c12, #e67e22); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .header h1 { color: white; margin: 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .info-box { background: white; padding: 20px; border-left: 4px solid #f39c12; margin: 20px 0; }
+        .info-box strong { color: #f39c12; }
+        .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>⏳ Solicitação Recebida!</h1>
+        </div>
+        <div class="content">
+          <p>Olá, <strong>${nome}</strong>!</p>
+          <p>Recebemos sua solicitação de agendamento e ela está em análise.</p>
+          
+          <div class="info-box">
+            <p><strong>📅 Data:</strong> ${data}</p>
+            <p><strong>🕐 Horário:</strong> ${horario}</p>
+            <p><strong>💆 Serviço:</strong> ${servico}</p>
+          </div>
+          
+          <p><strong>Em breve você receberá um email confirmando seu agendamento.</strong></p>
+          <p>Nossa equipe está analisando a disponibilidade e entrará em contato em até 24 horas.</p>
+          
+          <p>Aguardamos você! 💙</p>
+          <p><strong>Equipe Belleza Estética</strong></p>
+        </div>
+        <div class="footer">
+          <p>Este é um email automático, por favor não responda.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+}
+
 function emailAgendamentoConfirmado(nome, data, horario, servico) {
   return `
     <!DOCTYPE html>
@@ -549,8 +591,55 @@ app.get('/api/admin/estatisticas', async (req, res) => {
   }
 })
 
-// Confirmar agendamento (só admin)
-app.patch('/api/agendamentos/:id/confirmar', async (req, res) => {
+// Confirmar agendamento pendente (só admin) - Muda de pendente para confirmado
+app.patch('/api/admin/agendamentos/:id/confirmar-pendente', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    // Buscar informações do agendamento
+    const [agendamento] = await pool.query(
+      `SELECT a.*, c.nome as clienteNome, c.email as clienteEmail, 
+              s.nome as servicoNome
+       FROM Agendamento a
+       JOIN Cliente c ON a.clienteId = c.id
+       JOIN Servico s ON a.servicoId = s.id
+       WHERE a.id = ?`,
+      [id]
+    )
+
+    if (agendamento.length === 0) {
+      return res.status(404).json({ error: 'Agendamento não encontrado' })
+    }
+
+    const info = agendamento[0]
+
+    if (info.status !== 'pendente') {
+      return res.status(400).json({ error: 'Este agendamento já foi processado' })
+    }
+
+    // Atualizar status para confirmado
+    await pool.query(
+      'UPDATE Agendamento SET status = ?, updatedAt = NOW() WHERE id = ?',
+      ['confirmado', id]
+    )
+
+    // Enviar email de confirmação para o cliente
+    const dataFormatada = new Date(info.data).toLocaleDateString('pt-BR')
+    enviarEmail(
+      info.clienteEmail,
+      '✅ Agendamento Confirmado - Belleza Estética',
+      emailAgendamentoConfirmado(info.clienteNome, dataFormatada, info.horario, info.servicoNome)
+    )
+
+    res.json({ message: 'Agendamento confirmado e cliente notificado por email' })
+  } catch (error) {
+    console.error('Erro ao confirmar agendamento:', error)
+    res.status(500).json({ error: 'Erro ao confirmar agendamento' })
+  }
+})
+
+// Marcar agendamento como concluído (só admin)
+app.patch('/api/agendamentos/:id/concluir', async (req, res) => {
   try {
     const { id } = req.params
 
@@ -559,10 +648,10 @@ app.patch('/api/agendamentos/:id/confirmar', async (req, res) => {
       ['concluido', id]
     )
 
-    res.json({ message: 'Agendamento confirmado como concluído' })
+    res.json({ message: 'Agendamento marcado como concluído' })
   } catch (error) {
-    console.error('Erro ao confirmar agendamento:', error)
-    res.status(500).json({ error: 'Erro ao confirmar agendamento' })
+    console.error('Erro ao concluir agendamento:', error)
+    res.status(500).json({ error: 'Erro ao concluir agendamento' })
   }
 })
 
@@ -585,7 +674,7 @@ app.patch('/api/admin/agendamentos/:id/reagendar', async (req, res) => {
     // Buscar informações do agendamento atual
     const [agendamentoAtual] = await connection.query(
       `SELECT a.*, c.nome as clienteNome, c.email as clienteEmail, 
-              s.nome as servicoNome
+              s.nome as servicoNome, a.duracaoTotal
        FROM Agendamento a
        JOIN Cliente c ON a.clienteId = c.id
        JOIN Servico s ON a.servicoId = s.id
@@ -601,15 +690,47 @@ app.patch('/api/admin/agendamentos/:id/reagendar', async (req, res) => {
     const info = agendamentoAtual[0]
     const dataAntigaFormatada = new Date(info.data).toLocaleDateString('pt-BR')
 
-    // Verificar se o novo horário já está ocupado (exceto o agendamento atual)
-    const [existing] = await connection.query(
-      'SELECT id FROM Agendamento WHERE DATE(data) = ? AND horario = ? AND id != ? AND status != ?',
-      [data, horario, id, 'cancelado']
+    // Calcular duração: primeiro verificar se há duracaoTotal no banco
+    let duracaoTotal = info.duracaoTotal
+    
+    // Se não houver duracaoTotal, tentar extrair da anotação (retrocompatibilidade)
+    if (!duracaoTotal && info.anotacao && info.anotacao.includes('Duração total:')) {
+      const duracaoMatch = info.anotacao.match(/Duração total: (\d+)min/)
+      duracaoTotal = duracaoMatch ? parseInt(duracaoMatch[1]) : 0
+    }
+    
+    // Se ainda não encontrou, buscar duração do serviço
+    if (!duracaoTotal) {
+      const [servico] = await connection.query(
+        'SELECT duracao FROM Servico WHERE id = ?',
+        [info.servicoId]
+      )
+      duracaoTotal = servico[0].duracao
+    }
+
+    // Calcular todos os horários que serão ocupados pelo reagendamento
+    const horariosQueSeraOcupado = calcularHorariosOcupados(horario, duracaoTotal)
+
+    // Buscar todos os agendamentos existentes para verificar conflitos (exceto o atual)
+    const [agendamentosExistentes] = await connection.query(
+      `SELECT a.horario, COALESCE(a.duracaoTotal, s.duracao) as duracao
+       FROM Agendamento a
+       JOIN Servico s ON a.servicoId = s.id
+       WHERE DATE(a.data) = ? AND a.status != ? AND a.id != ?`,
+      [data, 'cancelado', id]
     )
 
-    if (existing.length > 0) {
-      await connection.rollback()
-      return res.status(409).json({ error: 'Este horário já está ocupado' })
+    // Verificar se há conflito com algum agendamento existente
+    for (const ag of agendamentosExistentes) {
+      const horariosOcupados = calcularHorariosOcupados(ag.horario, ag.duracao)
+      
+      // Verificar se há interseção entre os horários
+      const temConflito = horariosQueSeraOcupado.some(h => horariosOcupados.includes(h))
+      
+      if (temConflito) {
+        await connection.rollback()
+        return res.status(409).json({ error: 'Este horário conflita com outro agendamento. Por favor, escolha outro horário.' })
+      }
     }
 
     // Atualizar agendamento
@@ -702,6 +823,254 @@ app.patch('/api/admin/servicos/:id/toggle', async (req, res) => {
   }
 })
 
+// Excluir serviço (só admin)
+app.delete('/api/admin/servicos/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    // Verificar se existem agendamentos com este serviço
+    const [agendamentos] = await pool.query(
+      'SELECT COUNT(*) as total FROM Agendamento WHERE servicoId = ? AND status IN ("confirmado", "concluido")',
+      [id]
+    )
+
+    if (agendamentos[0].total > 0) {
+      return res.status(400).json({ 
+        error: 'Não é possível excluir este serviço pois existem agendamentos vinculados a ele. Considere desativá-lo.' 
+      })
+    }
+
+    // Excluir o serviço
+    await pool.query('DELETE FROM Servico WHERE id = ?', [id])
+
+    res.json({ message: 'Serviço excluído com sucesso' })
+  } catch (error) {
+    console.error('Erro ao excluir serviço:', error)
+    res.status(500).json({ error: 'Erro ao excluir serviço' })
+  }
+})
+
+// ==================== ROTAS DE COLABORADORES ====================
+
+// Listar colaboradores (admin)
+app.get('/api/admin/colaboradores', async (req, res) => {
+  try {
+    const [colaboradores] = await pool.query(`
+      SELECT c.*, 
+             GROUP_CONCAT(DISTINCT s.id) as servicosIds,
+             GROUP_CONCAT(DISTINCT s.nome) as servicosNomes
+      FROM Colaborador c
+      LEFT JOIN ColaboradorServico cs ON c.id = cs.colaboradorId
+      LEFT JOIN Servico s ON cs.servicoId = s.id
+      GROUP BY c.id
+      ORDER BY c.nome
+    `)
+    
+    // Formatar os dados
+    const colaboradoresFormatados = colaboradores.map(col => ({
+      ...col,
+      servicosIds: col.servicosIds ? col.servicosIds.split(',').map(id => parseInt(id)) : [],
+      servicosNomes: col.servicosNomes ? col.servicosNomes.split(',') : []
+    }))
+    
+    res.json(colaboradoresFormatados)
+  } catch (error) {
+    console.error('Erro ao buscar colaboradores:', error)
+    res.status(500).json({ error: 'Erro ao buscar colaboradores' })
+  }
+})
+
+// Criar colaborador (admin)
+app.post('/api/admin/colaboradores', async (req, res) => {
+  const connection = await pool.getConnection()
+  try {
+    const { nome, email, telefone, especialidade, servicosIds } = req.body
+
+    if (!nome || !email) {
+      return res.status(400).json({ error: 'Nome e email são obrigatórios' })
+    }
+
+    await connection.beginTransaction()
+
+    // Verificar se email já existe
+    const [existente] = await connection.query(
+      'SELECT id FROM Colaborador WHERE email = ?',
+      [email]
+    )
+
+    if (existente.length > 0) {
+      await connection.rollback()
+      return res.status(400).json({ error: 'Email já cadastrado' })
+    }
+
+    // Criar colaborador
+    const [result] = await connection.query(
+      'INSERT INTO Colaborador (nome, email, telefone, especialidade, ativo, createdAt, updatedAt) VALUES (?, ?, ?, ?, TRUE, NOW(), NOW())',
+      [nome, email, telefone || null, especialidade || null]
+    )
+
+    const colaboradorId = result.insertId
+
+    // Adicionar serviços se fornecidos
+    if (servicosIds && servicosIds.length > 0) {
+      const values = servicosIds.map(servicoId => [colaboradorId, servicoId])
+      await connection.query(
+        'INSERT INTO ColaboradorServico (colaboradorId, servicoId) VALUES ?',
+        [values]
+      )
+    }
+
+    await connection.commit()
+
+    res.status(201).json({ 
+      id: colaboradorId,
+      message: 'Colaborador criado com sucesso' 
+    })
+  } catch (error) {
+    await connection.rollback()
+    console.error('Erro ao criar colaborador:', error)
+    res.status(500).json({ error: 'Erro ao criar colaborador' })
+  } finally {
+    connection.release()
+  }
+})
+
+// Atualizar colaborador (admin)
+app.put('/api/admin/colaboradores/:id', async (req, res) => {
+  const connection = await pool.getConnection()
+  try {
+    const { id } = req.params
+    const { nome, email, telefone, especialidade, servicosIds } = req.body
+
+    if (!nome || !email) {
+      return res.status(400).json({ error: 'Nome e email são obrigatórios' })
+    }
+
+    await connection.beginTransaction()
+
+    // Verificar se email já existe em outro colaborador
+    const [existente] = await connection.query(
+      'SELECT id FROM Colaborador WHERE email = ? AND id != ?',
+      [email, id]
+    )
+
+    if (existente.length > 0) {
+      await connection.rollback()
+      return res.status(400).json({ error: 'Email já cadastrado para outro colaborador' })
+    }
+
+    // Atualizar colaborador
+    await connection.query(
+      'UPDATE Colaborador SET nome = ?, email = ?, telefone = ?, especialidade = ?, updatedAt = NOW() WHERE id = ?',
+      [nome, email, telefone || null, especialidade || null, id]
+    )
+
+    // Remover serviços antigos
+    await connection.query(
+      'DELETE FROM ColaboradorServico WHERE colaboradorId = ?',
+      [id]
+    )
+
+    // Adicionar novos serviços
+    if (servicosIds && servicosIds.length > 0) {
+      const values = servicosIds.map(servicoId => [id, servicoId])
+      await connection.query(
+        'INSERT INTO ColaboradorServico (colaboradorId, servicoId) VALUES ?',
+        [values]
+      )
+    }
+
+    await connection.commit()
+
+    res.json({ message: 'Colaborador atualizado com sucesso' })
+  } catch (error) {
+    await connection.rollback()
+    console.error('Erro ao atualizar colaborador:', error)
+    res.status(500).json({ error: 'Erro ao atualizar colaborador' })
+  } finally {
+    connection.release()
+  }
+})
+
+// Ativar/Desativar colaborador (admin)
+app.patch('/api/admin/colaboradores/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { ativo } = req.body
+
+    await pool.query(
+      'UPDATE Colaborador SET ativo = ?, updatedAt = NOW() WHERE id = ?',
+      [ativo, id]
+    )
+
+    res.json({ message: `Colaborador ${ativo ? 'ativado' : 'desativado'} com sucesso` })
+  } catch (error) {
+    console.error('Erro ao atualizar status do colaborador:', error)
+    res.status(500).json({ error: 'Erro ao atualizar status' })
+  }
+})
+
+// Excluir colaborador (admin)
+app.delete('/api/admin/colaboradores/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    // Verificar se existem agendamentos com este colaborador
+    const [agendamentos] = await pool.query(
+      'SELECT COUNT(*) as total FROM Agendamento WHERE colaboradorId = ? AND status IN ("confirmado", "pendente")',
+      [id]
+    )
+
+    if (agendamentos[0].total > 0) {
+      return res.status(400).json({ 
+        error: 'Não é possível excluir este colaborador pois existem agendamentos vinculados. Considere desativá-lo.' 
+      })
+    }
+
+    // Excluir o colaborador (relacionamentos serão removidos automaticamente por CASCADE)
+    await pool.query('DELETE FROM Colaborador WHERE id = ?', [id])
+
+    res.json({ message: 'Colaborador excluído com sucesso' })
+  } catch (error) {
+    console.error('Erro ao excluir colaborador:', error)
+    res.status(500).json({ error: 'Erro ao excluir colaborador' })
+  }
+})
+
+// Buscar colaboradores disponíveis para um serviço
+app.get('/api/colaboradores/servico/:servicoId', async (req, res) => {
+  try {
+    const { servicoId } = req.params
+    const { data, horario } = req.query
+
+    const [colaboradores] = await pool.query(`
+      SELECT DISTINCT c.id, c.nome, c.especialidade
+      FROM Colaborador c
+      INNER JOIN ColaboradorServico cs ON c.id = cs.colaboradorId
+      WHERE cs.servicoId = ? AND c.ativo = TRUE
+      ORDER BY c.nome
+    `, [servicoId])
+
+    // Se data e horário forem fornecidos, filtrar apenas disponíveis
+    if (data && horario) {
+      const [ocupados] = await pool.query(`
+        SELECT colaboradorId 
+        FROM Agendamento 
+        WHERE DATE(data) = ? AND horario = ? AND status != 'cancelado'
+      `, [data, horario])
+
+      const idsOcupados = ocupados.map(a => a.colaboradorId)
+      const disponiveis = colaboradores.filter(c => !idsOcupados.includes(c.id))
+      return res.json(disponiveis)
+    }
+
+    res.json(colaboradores)
+  } catch (error) {
+    console.error('Erro ao buscar colaboradores:', error)
+    res.status(500).json({ error: 'Erro ao buscar colaboradores' })
+  }
+})
+
 // ==================== ROTAS PÚBLICAS ====================
 
 // Registro de cliente
@@ -776,40 +1145,218 @@ app.post('/api/cliente/login', async (req, res) => {
 })
 
 
+// Função auxiliar para calcular próximos horários baseado na duração
+function calcularHorariosOcupados(horarioInicial, duracaoMinutos) {
+  const horarios = []
+  const [hora, minuto] = horarioInicial.split(':').map(Number)
+  let totalMinutos = hora * 60 + minuto
+  
+  // Adicionar o horário inicial
+  horarios.push(horarioInicial)
+  
+  // Calcular quantos slots de 30 minutos são necessários
+  const slotsNecessarios = Math.ceil(duracaoMinutos / 30)
+  
+  // Adicionar os próximos horários
+  for (let i = 1; i < slotsNecessarios; i++) {
+    totalMinutos += 30
+    const h = Math.floor(totalMinutos / 60)
+    const m = totalMinutos % 60
+    horarios.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`)
+  }
+  
+  return horarios
+}
+
 // Rota para buscar horários disponíveis
 app.get('/api/horarios-disponiveis', async (req, res) => {
   try {
-    const { data, servicoId, excluirAgendamento } = req.query
+    const { data, servicoId, duracaoTotal, excluirAgendamento } = req.query
     
     if (!data) {
       return res.status(400).json({ error: 'Data é obrigatória' })
     }
 
-    // Buscar todos os agendamentos para a data específica (excluindo o agendamento sendo reagendado)
-    let query = 'SELECT horario FROM Agendamento WHERE DATE(data) = ? AND status != ?'
+    // Buscar configurações
+    const [configRows] = await pool.query(`
+      SELECT chave, valor, tipo 
+      FROM Configuracao 
+      WHERE chave IN ('horario_abertura', 'horario_fechamento', 'dias_funcionamento', 'dias_antecedencia_max', 'intervalo_agendamento')
+    `)
+    
+    const config = {}
+    configRows.forEach(c => {
+      if (c.tipo === 'json') {
+        config[c.chave] = JSON.parse(c.valor)
+      } else if (c.tipo === 'number') {
+        config[c.chave] = parseInt(c.valor)
+      } else {
+        config[c.chave] = c.valor
+      }
+    })
+
+    // Validar se a data está dentro do período permitido
+    const dataAgendamento = new Date(data + 'T00:00:00')
+    const hoje = new Date()
+    hoje.setHours(0, 0, 0, 0)
+    
+    const diferencaDias = Math.ceil((dataAgendamento - hoje) / (1000 * 60 * 60 * 24))
+    
+    if (diferencaDias < 0) {
+      return res.status(400).json({ error: 'Não é possível agendar em datas passadas' })
+    }
+    
+    const diasMaxAntecedencia = config.dias_antecedencia_max || 30
+    if (diferencaDias > diasMaxAntecedencia) {
+      return res.status(400).json({ 
+        error: `Agendamentos permitidos apenas com até ${diasMaxAntecedencia} dias de antecedência` 
+      })
+    }
+
+    // Validar dia da semana
+    const diaSemana = dataAgendamento.getDay().toString()
+    const diasFuncionamento = config.dias_funcionamento || ['1','2','3','4','5','6']
+    
+    if (!diasFuncionamento.includes(diaSemana)) {
+      return res.status(400).json({ error: 'A empresa não funciona neste dia da semana' })
+    }
+
+    let duracaoParaBusca = 0
+    let servicoIdParaBusca = servicoId
+
+    // Se duracaoTotal for fornecida (múltiplos serviços), usar ela
+    if (duracaoTotal) {
+      duracaoParaBusca = parseInt(duracaoTotal)
+    } 
+    // Caso contrário, buscar duração do serviço único
+    else if (servicoId) {
+      const [servico] = await pool.query(
+        'SELECT duracao FROM Servico WHERE id = ?',
+        [servicoId]
+      )
+
+      if (servico.length === 0) {
+        return res.status(400).json({ error: 'Serviço não encontrado' })
+      }
+
+      duracaoParaBusca = servico[0].duracao
+    } else {
+      return res.status(400).json({ error: 'servicoId ou duracaoTotal é obrigatório' })
+    }
+
+    // Buscar quantos colaboradores podem realizar este serviço
+    let totalColaboradores = 1 // Default: sem sistema de colaboradores
+    
+    if (servicoIdParaBusca) {
+      const [colaboradores] = await pool.query(`
+        SELECT COUNT(DISTINCT c.id) as total
+        FROM Colaborador c
+        INNER JOIN ColaboradorServico cs ON c.id = cs.colaboradorId
+        WHERE cs.servicoId = ? AND c.ativo = TRUE
+      `, [servicoIdParaBusca])
+      
+      console.log(`[DEBUG] Serviço ID: ${servicoIdParaBusca}`)
+      console.log(`[DEBUG] Colaboradores ativos encontrados: ${colaboradores[0].total}`)
+      
+      if (colaboradores[0].total > 0) {
+        totalColaboradores = colaboradores[0].total
+      }
+    }
+    
+    console.log(`[DEBUG] Total de colaboradores para o serviço: ${totalColaboradores}`)
+
+    // Buscar todos os agendamentos para a data específica com suas durações
+    let query = `
+      SELECT a.horario, COALESCE(a.duracaoTotal, s.duracao) as duracao, a.colaboradorId
+      FROM Agendamento a
+      JOIN Servico s ON a.servicoId = s.id
+      WHERE DATE(a.data) = ? AND a.status != ?
+    `
     const params = [data, 'cancelado']
     
     if (excluirAgendamento) {
-      query += ' AND id != ?'
+      query += ' AND a.id != ?'
       params.push(excluirAgendamento)
     }
     
     const [agendamentos] = await pool.query(query, params)
 
-    const horariosOcupados = agendamentos.map(a => a.horario)
+    // Contar quantos agendamentos existem para cada horário (considerando duração)
+    const contagemPorHorario = {}
+    
+    agendamentos.forEach(ag => {
+      const horariosDoAgendamento = calcularHorariosOcupados(ag.horario, ag.duracao)
+      horariosDoAgendamento.forEach(h => {
+        contagemPorHorario[h] = (contagemPorHorario[h] || 0) + 1
+      })
+    })
+    
+    console.log(`[DEBUG] Agendamentos encontrados: ${agendamentos.length}`)
+    console.log('[DEBUG] Contagem por horário:', contagemPorHorario)
 
-    // Horários disponíveis (8h às 18h, de hora em hora)
+    // Usar horários das configurações
+    const horarioAbertura = config.horario_abertura || '08:00'
+    const horarioFechamento = config.horario_fechamento || '18:00'
+    const intervalo = config.intervalo_agendamento || 30
+    
+    const [horaAbre, minAbre] = horarioAbertura.split(':').map(Number)
+    const [horaFecha, minFecha] = horarioFechamento.split(':').map(Number)
+    
+    const minutosAbertura = horaAbre * 60 + minAbre
+    const minutosFechamento = horaFecha * 60 + minFecha
+
+    // Gerar todos os horários possíveis baseado nas configurações
     const todosHorarios = []
-    for (let hora = 8; hora < 18; hora++) {
-      todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`)
-      todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`)
+    for (let minutos = minutosAbertura; minutos < minutosFechamento; minutos += intervalo) {
+      const h = Math.floor(minutos / 60)
+      const m = minutos % 60
+      todosHorarios.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`)
     }
 
-    const horariosDisponiveis = todosHorarios.filter(
-      horario => !horariosOcupados.includes(horario)
-    )
+    // Filtrar horários disponíveis e calcular vagas
+    const horariosComVagas = todosHorarios
+      .map(horario => {
+        const horariosNecessarios = calcularHorariosOcupados(horario, duracaoParaBusca)
+        
+        // Verificar quantas vagas estão disponíveis
+        let vagasDisponiveis = totalColaboradores
+        
+        for (const h of horariosNecessarios) {
+          // Verificar se o horário não ultrapassa o horário de fechamento
+          const [hora, min] = h.split(':').map(Number)
+          const minutosSlot = hora * 60 + min
+          
+          if (minutosSlot >= minutosFechamento) {
+            vagasDisponiveis = 0
+            break
+          }
+          if (hora >= 18) {
+            vagasDisponiveis = 0
+            break
+          }
+          
+          // Calcular vagas disponíveis para este slot
+          const ocupados = contagemPorHorario[h] || 0
+          const vagasNesteSlot = totalColaboradores - ocupados
+          
+          // A vaga disponível é o mínimo entre todos os slots necessários
+          vagasDisponiveis = Math.min(vagasDisponiveis, vagasNesteSlot)
+        }
+        
+        return {
+          horario,
+          vagasDisponiveis,
+          totalVagas: totalColaboradores
+        }
+      })
+      .filter(item => item.vagasDisponiveis > 0)
 
-    res.json({ horariosDisponiveis })
+    const horariosDisponiveis = horariosComVagas.map(item => item.horario)
+
+    res.json({ 
+      horariosDisponiveis,
+      horariosComVagas // Incluir informação detalhada sobre vagas
+    })
   } catch (error) {
     console.error('Erro ao buscar horários:', error)
     res.status(500).json({ error: 'Erro ao buscar horários disponíveis' })
@@ -843,24 +1390,71 @@ app.post('/api/agendamentos', async (req, res) => {
   const connection = await pool.getConnection()
   
   try {
-    const { nome, email, telefone, servicoId, data, horario, observacoes } = req.body
+    const { nome, email, telefone, servicoId, servicosIds, data, horario, observacoes } = req.body
+
+    // Suportar tanto serviço único quanto múltiplos serviços
+    const servicosParaAgendar = servicosIds && servicosIds.length > 0 ? servicosIds : [servicoId]
 
     // Validações
-    if (!nome || !email || !telefone || !servicoId || !data || !horario) {
+    if (!nome || !email || !telefone || !servicosParaAgendar.length || !data || !horario) {
       return res.status(400).json({ error: 'Todos os campos obrigatórios devem ser preenchidos' })
     }
 
     await connection.beginTransaction()
 
-    // Verificar se o horário já está ocupado
-    const [existing] = await connection.query(
-      'SELECT id FROM Agendamento WHERE DATE(data) = ? AND horario = ?',
-      [data, horario]
+    // Buscar informações de todos os serviços
+    const [servicos] = await connection.query(
+      `SELECT id, nome, duracao, preco FROM Servico WHERE id IN (${servicosParaAgendar.map(() => '?').join(',')})`,
+      servicosParaAgendar
     )
 
-    if (existing.length > 0) {
+    if (servicos.length === 0) {
       await connection.rollback()
-      return res.status(409).json({ error: 'Este horário já está ocupado' })
+      return res.status(400).json({ error: 'Serviço(s) não encontrado(s)' })
+    }
+
+    // Calcular duração e preço total
+    const duracaoTotal = servicos.reduce((total, s) => total + s.duracao, 0)
+    const precoTotal = servicos.reduce((total, s) => total + parseFloat(s.preco), 0)
+
+    // Calcular todos os horários que serão ocupados por este agendamento
+    const horariosQueSeraOcupado = calcularHorariosOcupados(horario, duracaoTotal)
+
+    // Buscar quantos colaboradores podem realizar o serviço principal
+    const servicoPrincipal = servicos[0]
+    const [colaboradoresCapazes] = await connection.query(`
+      SELECT COUNT(DISTINCT c.id) as total
+      FROM Colaborador c
+      INNER JOIN ColaboradorServico cs ON c.id = cs.colaboradorId
+      WHERE cs.servicoId = ? AND c.ativo = TRUE
+    `, [servicoPrincipal.id])
+    
+    const totalColaboradores = colaboradoresCapazes[0].total || 1
+
+    // Contar quantos agendamentos já existem para cada horário necessário
+    const contagemPorHorario = {}
+    
+    for (const horarioNecessario of horariosQueSeraOcupado) {
+      const [agendamentosNoHorario] = await connection.query(
+        `SELECT COUNT(*) as total
+         FROM Agendamento a
+         WHERE DATE(a.data) = ? 
+         AND a.horario = ?
+         AND a.status != ?`,
+        [data, horarioNecessario, 'cancelado']
+      )
+      
+      contagemPorHorario[horarioNecessario] = agendamentosNoHorario[0].total
+    }
+
+    // Verificar se há colaboradores disponíveis em todos os horários necessários
+    for (const horarioNecessario of horariosQueSeraOcupado) {
+      if (contagemPorHorario[horarioNecessario] >= totalColaboradores) {
+        await connection.rollback()
+        return res.status(409).json({ 
+          error: 'Não há profissionais disponíveis neste horário. Por favor, escolha outro horário.' 
+        })
+      }
     }
 
     // Buscar ou criar cliente
@@ -880,26 +1474,58 @@ app.post('/api/agendamentos', async (req, res) => {
       clienteId = cliente[0].id
     }
 
-    // Criar agendamento
+    // Buscar colaborador disponível para o serviço principal
+    let colaboradorId = null
+    
+    const [colaboradoresDisponiveis] = await connection.query(`
+      SELECT c.id
+      FROM Colaborador c
+      INNER JOIN ColaboradorServico cs ON c.id = cs.colaboradorId
+      WHERE cs.servicoId = ? AND c.ativo = TRUE
+    `, [servicos[0].id])
+    
+    if (colaboradoresDisponiveis.length > 0) {
+      // Buscar qual colaborador está menos ocupado neste horário
+      const [ocupacao] = await connection.query(`
+        SELECT colaboradorId, COUNT(*) as total
+        FROM Agendamento
+        WHERE DATE(data) = ? AND horario = ? AND status != 'cancelado'
+        AND colaboradorId IN (${colaboradoresDisponiveis.map(() => '?').join(',')})
+        GROUP BY colaboradorId
+      `, [data, horario, ...colaboradoresDisponiveis.map(c => c.id)])
+      
+      const idsOcupados = ocupacao.map(o => o.colaboradorId)
+      const colaboradorLivre = colaboradoresDisponiveis.find(c => !idsOcupados.includes(c.id))
+      
+      colaboradorId = colaboradorLivre ? colaboradorLivre.id : null
+    }
+
+    // Criar um agendamento para o primeiro serviço (agendamento principal)
     const [agendamento] = await connection.query(
-      'INSERT INTO Agendamento (clienteId, servicoId, data, horario, observacoes, valorCobrado, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, (SELECT preco FROM Servico WHERE id = ?), ?, NOW(), NOW())',
-      [clienteId, servicoId, data, horario, observacoes || null, servicoId, 'confirmado']
+      'INSERT INTO Agendamento (clienteId, servicoId, data, horario, observacoes, valorCobrado, duracaoTotal, colaboradorId, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
+      [clienteId, servicos[0].id, data, horario, observacoes || null, precoTotal, duracaoTotal, colaboradorId, 'pendente']
     )
 
-    // Buscar informações do serviço para o email
-    const [servico] = await connection.query(
-      'SELECT nome FROM Servico WHERE id = ?',
-      [servicoId]
-    )
+    // Se houver múltiplos serviços, adicionar anotação informando quais foram combinados
+    if (servicos.length > 1) {
+      const nomesServicos = servicos.map(s => s.nome).join(', ')
+      const anotacaoServicos = `Agendamento combinado: ${nomesServicos} (Duração total: ${duracaoTotal}min, Valor total: R$ ${precoTotal.toFixed(2)})`
+      
+      await connection.query(
+        'UPDATE Agendamento SET anotacao = ? WHERE id = ?',
+        [anotacaoServicos, agendamento.insertId]
+      )
+    }
 
     await connection.commit()
 
-    // Enviar email de confirmação
+    // Enviar email de recebimento do pedido
     const dataFormatada = new Date(data + 'T00:00:00').toLocaleDateString('pt-BR')
+    const nomesServicos = servicos.map(s => s.nome).join(', ')
     enviarEmail(
       email,
-      '✅ Agendamento Confirmado - Belleza Estética',
-      emailAgendamentoConfirmado(nome, dataFormatada, horario, servico[0].nome)
+      '⏳ Solicitação de Agendamento Recebida - Belleza Estética',
+      emailAgendamentoPendente(nome, dataFormatada, horario, nomesServicos)
     )
 
     res.status(201).json({ 
@@ -995,6 +1621,142 @@ app.patch('/api/agendamentos/:id/cancelar', async (req, res) => {
   } catch (error) {
     console.error('Erro ao cancelar agendamento:', error)
     res.status(500).json({ error: 'Erro ao cancelar agendamento' })
+  }
+})
+
+// ============ ROTAS DE CONFIGURAÇÕES ============
+
+// Buscar todas as configurações
+app.get('/api/admin/configuracoes', async (req, res) => {
+  try {
+    const [configuracoes] = await pool.query('SELECT * FROM Configuracao ORDER BY chave')
+    
+    // Transformar array em objeto para facilitar uso no frontend
+    const config = {}
+    configuracoes.forEach(c => {
+      if (c.tipo === 'json') {
+        config[c.chave] = JSON.parse(c.valor)
+      } else if (c.tipo === 'number') {
+        config[c.chave] = parseInt(c.valor)
+      } else if (c.tipo === 'boolean') {
+        config[c.chave] = c.valor === 'true'
+      } else {
+        config[c.chave] = c.valor
+      }
+    })
+    
+    res.json(config)
+  } catch (error) {
+    console.error('Erro ao buscar configurações:', error)
+    res.status(500).json({ error: 'Erro ao buscar configurações' })
+  }
+})
+
+// Buscar configurações públicas (para clientes)
+app.get('/api/configuracoes/publicas', async (req, res) => {
+  try {
+    const [configuracoes] = await pool.query(`
+      SELECT chave, valor, tipo 
+      FROM Configuracao 
+      WHERE chave IN ('horario_abertura', 'horario_fechamento', 'dias_funcionamento', 'dias_antecedencia_max', 'intervalo_agendamento')
+    `)
+    
+    const config = {}
+    configuracoes.forEach(c => {
+      if (c.tipo === 'json') {
+        config[c.chave] = JSON.parse(c.valor)
+      } else if (c.tipo === 'number') {
+        config[c.chave] = parseInt(c.valor)
+      } else if (c.tipo === 'boolean') {
+        config[c.chave] = c.valor === 'true'
+      } else {
+        config[c.chave] = c.valor
+      }
+    })
+    
+    res.json(config)
+  } catch (error) {
+    console.error('Erro ao buscar configurações públicas:', error)
+    res.status(500).json({ error: 'Erro ao buscar configurações' })
+  }
+})
+
+// Atualizar configuração específica
+app.put('/api/admin/configuracoes/:chave', async (req, res) => {
+  try {
+    const { chave } = req.params
+    const { valor } = req.body
+
+    // Validações específicas
+    if (chave === 'horario_abertura' || chave === 'horario_fechamento') {
+      // Validar formato HH:MM
+      if (!/^\d{2}:\d{2}$/.test(valor)) {
+        return res.status(400).json({ error: 'Formato de horário inválido. Use HH:MM' })
+      }
+    }
+
+    if (chave === 'dias_antecedencia_max' || chave === 'intervalo_agendamento') {
+      if (isNaN(valor) || parseInt(valor) < 0) {
+        return res.status(400).json({ error: 'Valor deve ser um número positivo' })
+      }
+    }
+
+    if (chave === 'dias_funcionamento') {
+      if (!Array.isArray(valor)) {
+        return res.status(400).json({ error: 'dias_funcionamento deve ser um array' })
+      }
+    }
+
+    // Preparar valor para salvar
+    let valorParaSalvar = valor
+    if (typeof valor === 'object') {
+      valorParaSalvar = JSON.stringify(valor)
+    } else {
+      valorParaSalvar = String(valor)
+    }
+
+    await pool.query(
+      'UPDATE Configuracao SET valor = ?, updatedAt = NOW() WHERE chave = ?',
+      [valorParaSalvar, chave]
+    )
+
+    res.json({ message: 'Configuração atualizada com sucesso' })
+  } catch (error) {
+    console.error('Erro ao atualizar configuração:', error)
+    res.status(500).json({ error: 'Erro ao atualizar configuração' })
+  }
+})
+
+// Atualizar múltiplas configurações de uma vez
+app.put('/api/admin/configuracoes', async (req, res) => {
+  const connection = await pool.getConnection()
+  try {
+    const configuracoes = req.body // { chave1: valor1, chave2: valor2, ... }
+
+    await connection.beginTransaction()
+
+    for (const [chave, valor] of Object.entries(configuracoes)) {
+      let valorParaSalvar = valor
+      if (typeof valor === 'object') {
+        valorParaSalvar = JSON.stringify(valor)
+      } else {
+        valorParaSalvar = String(valor)
+      }
+
+      await connection.query(
+        'UPDATE Configuracao SET valor = ?, updatedAt = NOW() WHERE chave = ?',
+        [valorParaSalvar, chave]
+      )
+    }
+
+    await connection.commit()
+    res.json({ message: 'Configurações atualizadas com sucesso' })
+  } catch (error) {
+    await connection.rollback()
+    console.error('Erro ao atualizar configurações:', error)
+    res.status(500).json({ error: 'Erro ao atualizar configurações' })
+  } finally {
+    connection.release()
   }
 })
 

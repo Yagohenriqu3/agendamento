@@ -5,7 +5,16 @@ export default function PainelAdmin() {
   const [agendamentos, setAgendamentos] = useState([])
   const [clientes, setClientes] = useState([])
   const [servicos, setServicos] = useState([])
-  const [abaAtiva, setAbaAtiva] = useState('agendamentos') // 'agendamentos', 'clientes' ou 'servicos'
+  const [colaboradores, setColaboradores] = useState([])
+  const [abaAtiva, setAbaAtiva] = useState('agendamentos') // 'agendamentos', 'clientes', 'administracao'
+  const [subAbaAdmin, setSubAbaAdmin] = useState('servicos') // 'servicos', 'equipe', 'faturamento', 'configuracoes'
+  const [configuracoes, setConfiguracoes] = useState({
+    horario_abertura: '08:00',
+    horario_fechamento: '18:00',
+    dias_funcionamento: ['1','2','3','4','5','6'],
+    dias_antecedencia_max: 30,
+    intervalo_agendamento: 30
+  })
   const [filtroData, setFiltroData] = useState('')
   const [filtroCliente, setFiltroCliente] = useState('')
   const [buscaCliente, setBuscaCliente] = useState('')
@@ -14,6 +23,7 @@ export default function PainelAdmin() {
   const [editandoAnotacao, setEditandoAnotacao] = useState(null)
   const [editandoValor, setEditandoValor] = useState(null)
   const [editandoCliente, setEditandoCliente] = useState(null)
+  const [editandoColaborador, setEditandoColaborador] = useState(null)
   const [estatisticas, setEstatisticas] = useState(null)
   const [mesSelecionado, setMesSelecionado] = useState(new Date().toISOString().slice(0, 7))
   const [loading, setLoading] = useState(true)
@@ -25,8 +35,16 @@ export default function PainelAdmin() {
     preco: '',
     descricao: ''
   })
+  const [novoColaborador, setNovoColaborador] = useState({
+    nome: '',
+    email: '',
+    telefone: '',
+    especialidade: '',
+    servicosIds: []
+  })
   const [mostrarFormAgendamento, setMostrarFormAgendamento] = useState(false)
   const [reagendando, setReagendando] = useState(null)
+  const [detalhesServicosModal, setDetalhesServicosModal] = useState(null)
   const [formAgendamento, setFormAgendamento] = useState({
     clienteId: '',
     servicoId: '',
@@ -35,9 +53,11 @@ export default function PainelAdmin() {
     observacoes: ''
   })
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([])
+  const [paginaAtual, setPaginaAtual] = useState(1)
+  const agendamentosPorPagina = 15
   const navigate = useNavigate()
 
-  const API_URL = 'https://agendamento-backend-pju8.onrender.com'
+  const API_URL = 'http://localhost:3001/api'
 
   useEffect(() => {
     // Verificar se está autenticado e é admin
@@ -60,8 +80,40 @@ export default function PainelAdmin() {
     carregarAgendamentos()
     carregarClientes()
     carregarServicos()
+    carregarColaboradores()
     carregarEstatisticas()
+    carregarConfiguracoes()
   }, [navigate])
+
+  const carregarConfiguracoes = async () => {
+    try {
+      const response = await fetch(`${API_URL}/admin/configuracoes`)
+      const dados = await response.json()
+      setConfiguracoes(dados)
+    } catch (error) {
+      console.error('Erro ao carregar configurações:', error)
+    }
+  }
+
+  const salvarConfiguracoes = async () => {
+    try {
+      const response = await fetch(`${API_URL}/admin/configuracoes`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(configuracoes)
+      })
+
+      if (!response.ok) throw new Error('Erro ao salvar configurações')
+
+      alert('✅ Configurações salvas com sucesso!')
+      carregarConfiguracoes()
+    } catch (error) {
+      console.error('Erro ao salvar configurações:', error)
+      alert('Erro ao salvar configurações')
+    }
+  }
 
   const carregarEstatisticas = async (mes = mesSelecionado) => {
     try {
@@ -118,12 +170,14 @@ export default function PainelAdmin() {
   const handleFiltroData = (e) => {
     const data = e.target.value
     setFiltroData(data)
+    setPaginaAtual(1)
     carregarAgendamentos(data, filtroCliente)
   }
 
   const handleFiltroCliente = (e) => {
     const cliente = e.target.value
     setFiltroCliente(cliente)
+    setPaginaAtual(1)
     carregarAgendamentos(filtroData, cliente)
   }
 
@@ -149,25 +203,48 @@ export default function PainelAdmin() {
     }
   }
 
-  const handleConfirmar = async (id) => {
-    if (!confirm('Confirmar este agendamento como concluído?')) {
+  const handleConfirmarPendente = async (id) => {
+    if (!confirm('Confirmar este agendamento? O cliente receberá um email de confirmação.')) {
       return
     }
 
     try {
-      const response = await fetch(`${API_URL}/agendamentos/${id}/confirmar`, {
+      const response = await fetch(`${API_URL}/admin/agendamentos/${id}/confirmar-pendente`, {
         method: 'PATCH'
       })
 
       if (response.ok) {
-        alert('Agendamento confirmado como concluído!')
+        alert('Agendamento confirmado! Email enviado ao cliente.')
         carregarAgendamentos(filtroData)
       } else {
-        throw new Error('Erro ao confirmar')
+        const error = await response.json()
+        throw new Error(error.error || 'Erro ao confirmar')
       }
     } catch (error) {
       console.error('Erro ao confirmar agendamento:', error)
-      alert('Erro ao confirmar agendamento')
+      alert(error.message)
+    }
+  }
+
+  const handleConcluir = async (id) => {
+    if (!confirm('Marcar este agendamento como concluído?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/agendamentos/${id}/concluir`, {
+        method: 'PATCH'
+      })
+
+      if (response.ok) {
+        alert('Agendamento marcado como concluído!')
+        carregarAgendamentos(filtroData)
+      } else {
+        throw new Error('Erro ao concluir')
+      }
+    } catch (error) {
+      console.error('Erro ao concluir agendamento:', error)
+      alert('Erro ao concluir agendamento')
     }
   }
 
@@ -234,11 +311,175 @@ export default function PainelAdmin() {
     }
   }
 
+  const handleExcluirServico = async (id) => {
+    if (!confirm('Tem certeza que deseja EXCLUIR este serviço? Esta ação não pode ser desfeita!')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/admin/servicos/${id}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erro ao excluir serviço')
+      }
+
+      alert('Serviço excluído com sucesso!')
+      carregarServicos()
+    } catch (error) {
+      console.error('Erro ao excluir serviço:', error)
+      alert(error.message)
+    }
+  }
+
+  // ===== FUNÇÕES DE COLABORADORES =====
+  
+  const carregarColaboradores = async () => {
+    try {
+      const response = await fetch(`${API_URL}/admin/colaboradores`)
+      const dados = await response.json()
+      setColaboradores(dados)
+    } catch (error) {
+      console.error('Erro ao carregar colaboradores:', error)
+    }
+  }
+
+  const handleCriarColaborador = async (e) => {
+    e.preventDefault()
+
+    if (!novoColaborador.servicosIds || novoColaborador.servicosIds.length === 0) {
+      alert('Selecione pelo menos um serviço que o colaborador pode realizar')
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/admin/colaboradores`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(novoColaborador)
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erro ao criar colaborador')
+      }
+
+      alert('Colaborador criado com sucesso!')
+      setNovoColaborador({ nome: '', email: '', telefone: '', especialidade: '', servicosIds: [] })
+      carregarColaboradores()
+    } catch (error) {
+      console.error('Erro ao criar colaborador:', error)
+      alert(error.message)
+    }
+  }
+
+  const handleEditarColaborador = async (e) => {
+    e.preventDefault()
+
+    if (!editandoColaborador.servicosIds || editandoColaborador.servicosIds.length === 0) {
+      alert('Selecione pelo menos um serviço que o colaborador pode realizar')
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/admin/colaboradores/${editandoColaborador.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(editandoColaborador)
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erro ao editar colaborador')
+      }
+
+      alert('Colaborador atualizado com sucesso!')
+      setEditandoColaborador(null)
+      carregarColaboradores()
+    } catch (error) {
+      console.error('Erro ao editar colaborador:', error)
+      alert(error.message)
+    }
+  }
+
+  const handleToggleColaboradorStatus = async (id, ativo) => {
+    try {
+      const response = await fetch(`${API_URL}/admin/colaboradores/${id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ativo: !ativo })
+      })
+
+      if (!response.ok) throw new Error('Erro ao atualizar status')
+
+      carregarColaboradores()
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error)
+      alert('Erro ao atualizar status do colaborador')
+    }
+  }
+
+  const handleExcluirColaborador = async (id) => {
+    if (!confirm('Tem certeza que deseja EXCLUIR este colaborador? Esta ação não pode ser desfeita!')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/admin/colaboradores/${id}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erro ao excluir colaborador')
+      }
+
+      alert('Colaborador excluído com sucesso!')
+      carregarColaboradores()
+    } catch (error) {
+      console.error('Erro ao excluir colaborador:', error)
+      alert(error.message)
+    }
+  }
+
+  const handleToggleServicoColaborador = (servicoId) => {
+    if (editandoColaborador) {
+      const servicosAtuais = editandoColaborador.servicosIds || []
+      const novoArray = servicosAtuais.includes(servicoId)
+        ? servicosAtuais.filter(id => id !== servicoId)
+        : [...servicosAtuais, servicoId]
+      setEditandoColaborador({ ...editandoColaborador, servicosIds: novoArray })
+    } else {
+      const servicosAtuais = novoColaborador.servicosIds || []
+      const novoArray = servicosAtuais.includes(servicoId)
+        ? servicosAtuais.filter(id => id !== servicoId)
+        : [...servicosAtuais, servicoId]
+      setNovoColaborador({ ...novoColaborador, servicosIds: novoArray })
+    }
+  }
+
   const carregarHorariosDisponiveis = async (data, servicoId, agendamentoIdExcluir = null) => {
     if (!data || !servicoId) return
 
     try {
-      let url = `${API_URL}/horarios-disponiveis?data=${data}&servicoId=${servicoId}`
+      // Buscar duração do serviço selecionado
+      const servicoResponse = await fetch(`${API_URL}/servicos?todos=true`)
+      const todosServicos = await servicoResponse.json()
+      const servico = todosServicos.find(s => s.id === parseInt(servicoId))
+      
+      if (!servico) return
+      
+      const duracaoTotal = servico.duracao
+      
+      let url = `${API_URL}/horarios-disponiveis?data=${data}&duracaoTotal=${duracaoTotal}`
       if (agendamentoIdExcluir) {
         url += `&excluirAgendamento=${agendamentoIdExcluir}`
       }
@@ -354,6 +595,37 @@ export default function PainelAdmin() {
     })
   }
 
+  const carregarHorariosParaReagendamento = async (data, agendamento) => {
+    if (!data) return
+
+    try {
+      // Calcular duração: se for agendamento múltiplo, extrair da anotação
+      let duracaoTotal = 0
+      if (agendamento.anotacao && agendamento.anotacao.includes('Duração total:')) {
+        const duracaoMatch = agendamento.anotacao.match(/Duração total: (\d+)min/)
+        duracaoTotal = duracaoMatch ? parseInt(duracaoMatch[1]) : 0
+      }
+      
+      // Se não encontrou na anotação, buscar duração do serviço
+      if (duracaoTotal === 0) {
+        const servicoResponse = await fetch(`${API_URL}/servicos?todos=true`)
+        const todosServicos = await servicoResponse.json()
+        const servico = todosServicos.find(s => s.id === agendamento.servicoId)
+        duracaoTotal = servico ? servico.duracao : 30
+      }
+      
+      let url = `${API_URL}/horarios-disponiveis?data=${data}&duracaoTotal=${duracaoTotal}&excluirAgendamento=${agendamento.id}`
+      
+      const response = await fetch(url)
+      const resultado = await response.json()
+      
+      setHorariosDisponiveis(resultado.horariosDisponiveis || [])
+    } catch (error) {
+      console.error('Erro ao carregar horários:', error)
+      setHorariosDisponiveis([])
+    }
+  }
+
   const abrirFormAgendamentoCliente = (cliente) => {
     setFormAgendamento({
       clienteId: cliente.id,
@@ -400,7 +672,7 @@ export default function PainelAdmin() {
       setEditandoValor(null)
       carregarAgendamentos(filtroData, filtroCliente)
       // Recarregar estatísticas se estiver na aba de faturamento
-      if (abaAtiva === 'faturamento') {
+      if (abaAtiva === 'administracao' && subAbaAdmin === 'faturamento') {
         carregarEstatisticas(mesSelecionado)
       }
     } catch (error) {
@@ -516,6 +788,8 @@ export default function PainelAdmin() {
 
   const getStatusColor = (status) => {
     switch (status) {
+      case 'pendente':
+        return 'bg-yellow-100 text-yellow-800'
       case 'confirmado':
         return 'bg-green-100 text-green-800'
       case 'cancelado':
@@ -576,27 +850,65 @@ export default function PainelAdmin() {
               Clientes
             </button>
             <button
-              onClick={() => setAbaAtiva('servicos')}
+              onClick={() => setAbaAtiva('administracao')}
               className={`flex-1 py-3 md:py-4 px-3 md:px-6 font-semibold transition-all text-sm md:text-base whitespace-nowrap ${
-                abaAtiva === 'servicos'
+                abaAtiva === 'administracao'
                   ? 'text-[#6EC1E4] border-b-2 border-[#6EC1E4]'
                   : 'text-gray-600 hover:text-[#6EC1E4]'
               }`}
             >
-              Serviços
-            </button>
-            <button
-              onClick={() => setAbaAtiva('faturamento')}
-              className={`flex-1 py-3 md:py-4 px-3 md:px-6 font-semibold transition-all text-sm md:text-base whitespace-nowrap ${
-                abaAtiva === 'faturamento'
-                  ? 'text-[#6EC1E4] border-b-2 border-[#6EC1E4]'
-                  : 'text-gray-600 hover:text-[#6EC1E4]'
-              }`}
-            >
-              Faturamento
+              Administração
             </button>
           </div>
         </div>
+
+        {/* Sub-abas de Administração */}
+        {abaAtiva === 'administracao' && (
+          <div className="bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
+            <div className="flex border-b border-gray-200 overflow-x-auto">
+              <button
+                onClick={() => setSubAbaAdmin('servicos')}
+                className={`flex-1 py-3 px-4 md:px-6 font-medium transition-all text-sm md:text-base whitespace-nowrap ${
+                  subAbaAdmin === 'servicos'
+                    ? 'text-[#6EC1E4] bg-blue-50 border-b-2 border-[#6EC1E4]'
+                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50'
+                }`}
+              >
+                📋 Serviços
+              </button>
+              <button
+                onClick={() => setSubAbaAdmin('equipe')}
+                className={`flex-1 py-3 px-4 md:px-6 font-medium transition-all text-sm md:text-base whitespace-nowrap ${
+                  subAbaAdmin === 'equipe'
+                    ? 'text-[#6EC1E4] bg-blue-50 border-b-2 border-[#6EC1E4]'
+                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50'
+                }`}
+              >
+                👥 Equipe
+              </button>
+              <button
+                onClick={() => setSubAbaAdmin('faturamento')}
+                className={`flex-1 py-3 px-4 md:px-6 font-medium transition-all text-sm md:text-base whitespace-nowrap ${
+                  subAbaAdmin === 'faturamento'
+                    ? 'text-[#6EC1E4] bg-blue-50 border-b-2 border-[#6EC1E4]'
+                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50'
+                }`}
+              >
+                💰 Faturamento
+              </button>
+              <button
+                onClick={() => setSubAbaAdmin('configuracoes')}
+                className={`flex-1 py-3 px-4 md:px-6 font-medium transition-all text-sm md:text-base whitespace-nowrap ${
+                  subAbaAdmin === 'configuracoes'
+                    ? 'text-[#6EC1E4] bg-blue-50 border-b-2 border-[#6EC1E4]'
+                    : 'text-gray-600 hover:text-[#6EC1E4] hover:bg-gray-50'
+                }`}
+              >
+                ⚙️ Configurações
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Conteúdo das Abas */}
         {abaAtiva === 'agendamentos' ? (
@@ -731,6 +1043,21 @@ export default function PainelAdmin() {
                     <p className="text-sm text-gray-600">
                       <strong>Serviço:</strong> {reagendando.servicoNome}
                     </p>
+                    {reagendando.anotacao && reagendando.anotacao.includes('Agendamento combinado') && (
+                      <div className="mt-2 p-2 bg-blue-100 rounded border-l-4 border-blue-500">
+                        <p className="text-xs text-blue-800 font-semibold">📦 Agendamento Múltiplo</p>
+                        {(() => {
+                          const duracaoMatch = reagendando.anotacao.match(/Duração total: (\d+)min/)
+                          const valorMatch = reagendando.anotacao.match(/Valor total: R\$ ([\d.,]+)/)
+                          return (
+                            <p className="text-xs text-blue-700 mt-1">
+                              ⏱️ Duração: {duracaoMatch ? duracaoMatch[1] : '?'} min | 
+                              💰 Valor: R$ {valorMatch ? valorMatch[1] : reagendando.servicoPreco?.toFixed(2)}
+                            </p>
+                          )
+                        })()}
+                      </div>
+                    )}
                   </div>
 
                   <form onSubmit={handleReagendar} className="space-y-4">
@@ -745,7 +1072,7 @@ export default function PainelAdmin() {
                           onChange={(e) => {
                             const data = e.target.value
                             setFormAgendamento({ ...formAgendamento, data, horario: '' })
-                            carregarHorariosDisponiveis(data, reagendando.servicoId, reagendando.id)
+                            carregarHorariosParaReagendamento(data, reagendando)
                           }}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
                         />
@@ -808,6 +1135,115 @@ export default function PainelAdmin() {
               </div>
             )}
 
+            {/* Modal de Detalhes dos Serviços Múltiplos */}
+            {detalhesServicosModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800">
+                      Detalhes do Agendamento
+                    </h2>
+                    <button
+                      onClick={() => setDetalhesServicosModal(null)}
+                      className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Informações do Cliente */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h3 className="font-semibold text-gray-800 mb-2">Cliente</h3>
+                      <p className="text-gray-700"><strong>Nome:</strong> {detalhesServicosModal.clienteNome}</p>
+                      <p className="text-gray-700"><strong>Email:</strong> {detalhesServicosModal.clienteEmail}</p>
+                      <p className="text-gray-700"><strong>Telefone:</strong> {detalhesServicosModal.telefone}</p>
+                    </div>
+
+                    {/* Data e Horário */}
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <h3 className="font-semibold text-gray-800 mb-2">Data e Horário</h3>
+                      <p className="text-gray-700"><strong>📅 Data:</strong> {formatarData(detalhesServicosModal.data)}</p>
+                      <p className="text-gray-700"><strong>🕐 Horário:</strong> {detalhesServicosModal.horario}</p>
+                      <p className="text-gray-700"><strong>Status:</strong> 
+                        <span className={`ml-2 px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(detalhesServicosModal.status)}`}>
+                          {detalhesServicosModal.status}
+                        </span>
+                      </p>
+                    </div>
+
+                    {/* Serviços */}
+                    <div className="bg-green-50 rounded-lg p-4">
+                      <h3 className="font-semibold text-gray-800 mb-3">💆 Serviços Agendados</h3>
+                      {detalhesServicosModal.anotacao && detalhesServicosModal.anotacao.includes('Agendamento combinado') ? (
+                        <div className="space-y-3">
+                          {/* Extrair informações da anotação */}
+                          {(() => {
+                            const anotacao = detalhesServicosModal.anotacao
+                            const servicosMatch = anotacao.match(/Agendamento combinado: ([^(]+)/)
+                            const duracaoMatch = anotacao.match(/Duração total: (\d+)min/)
+                            const valorMatch = anotacao.match(/Valor total: R\$ ([\d.,]+)/)
+                            
+                            const servicos = servicosMatch ? servicosMatch[1].split(',').map(s => s.trim()) : []
+                            const duracao = duracaoMatch ? duracaoMatch[1] : '0'
+                            const valor = valorMatch ? valorMatch[1] : detalhesServicosModal.servicoPreco?.toFixed(2)
+
+                            return (
+                              <>
+                                <div className="bg-white rounded-lg p-3 border-l-4 border-green-500">
+                                  <p className="font-medium text-gray-800 mb-2">Lista de Serviços:</p>
+                                  <ul className="list-disc list-inside space-y-1">
+                                    {servicos.map((servico, index) => (
+                                      <li key={index} className="text-gray-700">{servico}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                
+                                <div className="flex justify-between items-center pt-3 border-t-2 border-green-300">
+                                  <div>
+                                    <p className="text-sm text-gray-600">Duração Total</p>
+                                    <p className="text-lg font-bold text-[#6EC1E4]">⏱️ {duracao} minutos</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm text-gray-600">Valor Total</p>
+                                    <p className="text-lg font-bold text-green-600">💰 R$ {valor}</p>
+                                  </div>
+                                </div>
+                              </>
+                            )
+                          })()}
+                        </div>
+                      ) : (
+                        <div className="bg-white rounded-lg p-3 border-l-4 border-green-500">
+                          <p className="font-medium text-gray-800">{detalhesServicosModal.servicoNome}</p>
+                          <p className="text-sm text-gray-600 mt-1">
+                            💰 Valor: R$ {detalhesServicosModal.servicoPreco?.toFixed(2)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Observações */}
+                    {detalhesServicosModal.observacoes && (
+                      <div className="bg-yellow-50 rounded-lg p-4">
+                        <h3 className="font-semibold text-gray-800 mb-2">📝 Observações do Cliente</h3>
+                        <p className="text-gray-700 whitespace-pre-wrap">{detalhesServicosModal.observacoes}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      onClick={() => setDetalhesServicosModal(null)}
+                      className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all font-semibold"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Filtros */}
             <div className="bg-white rounded-2xl shadow-xl p-4 md:p-6 mb-6">
           <div className="flex flex-col md:flex-row flex-wrap gap-4 items-stretch md:items-end">
@@ -846,6 +1282,7 @@ export default function PainelAdmin() {
               onClick={() => {
                 setFiltroData('')
                 setFiltroCliente('')
+                setPaginaAtual(1)
                 carregarAgendamentos()
               }}
               className="px-4 md:px-6 py-2 md:py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all font-semibold text-sm md:text-base"
@@ -855,6 +1292,7 @@ export default function PainelAdmin() {
             <button
               onClick={() => {
                 setFiltroData(dataHoje)
+                setPaginaAtual(1)
                 carregarAgendamentos(dataHoje, filtroCliente)
               }}
               className="px-4 md:px-6 py-2 md:py-3 bg-[#6EC1E4] text-white rounded-lg hover:bg-[#5ab0d3] transition-all font-semibold text-sm md:text-base"
@@ -870,6 +1308,11 @@ export default function PainelAdmin() {
             <h2 className="text-lg md:text-xl font-bold text-gray-800">
               Agendamentos ({agendamentos.length})
             </h2>
+            {agendamentos.length > agendamentosPorPagina && (
+              <p className="text-sm text-gray-500 mt-1">
+                Página {paginaAtual} de {Math.ceil(agendamentos.length / agendamentosPorPagina)}
+              </p>
+            )}
           </div>
 
           {loading ? (
@@ -881,126 +1324,333 @@ export default function PainelAdmin() {
               Nenhum agendamento encontrado
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px]">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Data
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Horário
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Cliente
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contato
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Serviço
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Valor
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ações
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {agendamentos.map((agendamento) => (
-                    <tr key={agendamento.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatarData(agendamento.data)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {agendamento.horario}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {agendamento.clienteNome}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        <div>{agendamento.clienteEmail}</div>
-                        <div className="text-xs text-gray-400">{agendamento.telefone || 'N/A'}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {agendamento.servicoNome}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {editandoValor === agendamento.id ? (
+            <>
+              {/* Visualização Desktop - Tabela */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Data/Hora
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Cliente
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Serviço
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Valor
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Ações
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {agendamentos
+                      .slice((paginaAtual - 1) * agendamentosPorPagina, paginaAtual * agendamentosPorPagina)
+                      .map((agendamento) => (
+                      <tr key={agendamento.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-4 text-sm">
+                          <div className="font-medium text-gray-900">{formatarData(agendamento.data)}</div>
+                          <div className="text-gray-600">{agendamento.horario}</div>
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          <div className="font-medium text-gray-900">{agendamento.clienteNome}</div>
+                          <div className="text-gray-600 text-xs">{agendamento.clienteEmail}</div>
+                          <div className="text-gray-400 text-xs">{agendamento.telefone || 'N/A'}</div>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-900">
                           <div className="flex items-center gap-2">
+                            <span>{agendamento.servicoNome}</span>
+                            {agendamento.anotacao && agendamento.anotacao.includes('Agendamento combinado') && (
+                              <button
+                                onClick={() => setDetalhesServicosModal(agendamento)}
+                                className="text-[#6EC1E4] hover:text-[#5ab0d3] font-semibold text-xs bg-blue-50 px-2 py-1 rounded"
+                                title="Ver todos os serviços"
+                              >
+                                +Múltiplos 🔍
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          {editandoValor === agendamento.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                step="0.01"
+                                defaultValue={agendamento.servicoPreco}
+                                id={`valor-${agendamento.id}`}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                              />
+                              <button
+                                onClick={() => {
+                                  const novoValor = document.getElementById(`valor-${agendamento.id}`).value
+                                  handleEditarValor(agendamento.id, novoValor)
+                                }}
+                                className="text-green-600 hover:text-green-800 font-semibold text-xs"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                onClick={() => setEditandoValor(null)}
+                                className="text-red-600 hover:text-red-800 font-semibold text-xs"
+                              >
+                                ✗
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-900">R$ {agendamento.servicoPreco?.toFixed(2)}</span>
+                              <button
+                                onClick={() => setEditandoValor(agendamento.id)}
+                                className="text-[#6EC1E4] hover:text-[#5ab0d3] text-xs"
+                              >
+                                ✏️
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(agendamento.status)}`}>
+                            {agendamento.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          {(agendamento.status === 'concluido' || agendamento.status === 'cancelado') ? (
+                            <span className="text-sm text-gray-400 italic">Sem ações</span>
+                          ) : (
+                            <select
+                              onChange={(e) => {
+                                const acao = e.target.value
+                                if (acao === 'confirmar') handleConfirmarPendente(agendamento.id)
+                                else if (acao === 'concluir') handleConcluir(agendamento.id)
+                                else if (acao === 'reagendar') iniciarReagendamento(agendamento)
+                                else if (acao === 'cancelar') handleCancelar(agendamento.id)
+                                e.target.value = ''
+                              }}
+                              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent bg-white"
+                            >
+                              <option value="">Ações...</option>
+                              {agendamento.status === 'pendente' && (
+                                <>
+                                  <option value="confirmar">✅ Confirmar</option>
+                                  <option value="reagendar">📅 Reagendar</option>
+                                  <option value="cancelar">❌ Cancelar</option>
+                                </>
+                              )}
+                              {agendamento.status === 'confirmado' && (
+                                <>
+                                  <option value="concluir">✓ Concluir</option>
+                                  <option value="reagendar">📅 Reagendar</option>
+                                  <option value="cancelar">❌ Cancelar</option>
+                                </>
+                              )}
+                            </select>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Visualização Mobile - Cards */}
+              <div className="lg:hidden divide-y divide-gray-200">
+                {agendamentos
+                  .slice((paginaAtual - 1) * agendamentosPorPagina, paginaAtual * agendamentosPorPagina)
+                  .map((agendamento) => (
+                    <div key={agendamento.id} className="p-4 hover:bg-gray-50">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <div className="font-semibold text-gray-900">{agendamento.clienteNome}</div>
+                          <div className="text-sm text-gray-600">{agendamento.clienteEmail}</div>
+                          <div className="text-xs text-gray-400">{agendamento.telefone || 'N/A'}</div>
+                        </div>
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(agendamento.status)}`}>
+                          {agendamento.status}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                        <div>
+                          <span className="text-gray-500">Data:</span>
+                          <div className="font-medium">{formatarData(agendamento.data)}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Horário:</span>
+                          <div className="font-medium">{agendamento.horario}</div>
+                        </div>
+                      </div>
+
+                      <div className="mb-3">
+                        <span className="text-gray-500 text-sm">Serviço:</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="font-medium">{agendamento.servicoNome}</span>
+                          {agendamento.anotacao && agendamento.anotacao.includes('Agendamento combinado') && (
+                            <button
+                              onClick={() => setDetalhesServicosModal(agendamento)}
+                              className="text-[#6EC1E4] hover:text-[#5ab0d3] font-semibold text-xs bg-blue-50 px-2 py-1 rounded"
+                            >
+                              +Múltiplos 🔍
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mb-3">
+                        <span className="text-gray-500 text-sm">Valor:</span>
+                        {editandoValor === agendamento.id ? (
+                          <div className="flex items-center gap-2 mt-1">
                             <input
                               type="number"
                               step="0.01"
                               defaultValue={agendamento.servicoPreco}
-                              id={`valor-${agendamento.id}`}
-                              className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                              id={`valor-mobile-${agendamento.id}`}
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
                             />
                             <button
                               onClick={() => {
-                                const novoValor = document.getElementById(`valor-${agendamento.id}`).value
+                                const novoValor = document.getElementById(`valor-mobile-${agendamento.id}`).value
                                 handleEditarValor(agendamento.id, novoValor)
                               }}
-                              className="text-green-600 hover:text-green-800 font-semibold text-xs"
+                              className="text-green-600 hover:text-green-800 font-semibold"
                             >
                               ✓
                             </button>
                             <button
                               onClick={() => setEditandoValor(null)}
-                              className="text-red-600 hover:text-red-800 font-semibold text-xs"
+                              className="text-red-600 hover:text-red-800 font-semibold"
                             >
                               ✗
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-900">R$ {agendamento.servicoPreco?.toFixed(2)}</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="font-medium text-green-600">R$ {agendamento.servicoPreco?.toFixed(2)}</span>
                             <button
                               onClick={() => setEditandoValor(agendamento.id)}
-                              className="text-[#6EC1E4] hover:text-[#5ab0d3] text-xs"
+                              className="text-[#6EC1E4] hover:text-[#5ab0d3] text-sm"
                             >
-                              ✏️
+                              ✏️ Editar
                             </button>
                           </div>
                         )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(agendamento.status)}`}>
-                          {agendamento.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                        {agendamento.status === 'confirmado' && (
-                          <>
-                            <button
-                              onClick={() => handleConfirmar(agendamento.id)}
-                              className="text-green-600 hover:text-green-900 font-semibold"
-                            >
-                              Concluir
-                            </button>
-                            <button
-                              onClick={() => iniciarReagendamento(agendamento)}
-                              className="text-blue-600 hover:text-blue-900 font-semibold"
-                            >
-                              Reagendar
-                            </button>
-                            <button
-                              onClick={() => handleCancelar(agendamento.id)}
-                              className="text-red-600 hover:text-red-900 font-semibold"
-                            >
-                              Cancelar
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
+                      </div>
+
+                      {(agendamento.status === 'concluido' || agendamento.status === 'cancelado') ? (
+                        <div className="text-center py-2 text-sm text-gray-400 italic">
+                          Sem ações disponíveis
+                        </div>
+                      ) : (
+                        <select
+                          onChange={(e) => {
+                            const acao = e.target.value
+                            if (acao === 'confirmar') handleConfirmarPendente(agendamento.id)
+                            else if (acao === 'concluir') handleConcluir(agendamento.id)
+                            else if (acao === 'reagendar') iniciarReagendamento(agendamento)
+                            else if (acao === 'cancelar') handleCancelar(agendamento.id)
+                            e.target.value = ''
+                          }}
+                          className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent bg-white font-medium"
+                        >
+                          <option value="">Selecione uma ação...</option>
+                          {agendamento.status === 'pendente' && (
+                            <>
+                              <option value="confirmar">✅ Confirmar Agendamento</option>
+                              <option value="reagendar">📅 Reagendar</option>
+                              <option value="cancelar">❌ Cancelar</option>
+                            </>
+                          )}
+                          {agendamento.status === 'confirmado' && (
+                            <>
+                              <option value="concluir">✓ Marcar como Concluído</option>
+                              <option value="reagendar">📅 Reagendar</option>
+                              <option value="cancelar">❌ Cancelar</option>
+                            </>
+                          )}
+                        </select>
+                      )}
+                    </div>
                   ))}
-                </tbody>
-              </table>
+              </div>
+            </>
+          )}
+
+          {/* Navegação de Paginação */}
+          {agendamentos.length > agendamentosPorPagina && (
+            <div className="px-4 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-sm text-gray-700">
+                  Mostrando {Math.min((paginaAtual - 1) * agendamentosPorPagina + 1, agendamentos.length)} até {Math.min(paginaAtual * agendamentosPorPagina, agendamentos.length)} de {agendamentos.length} agendamentos
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPaginaAtual(1)}
+                    disabled={paginaAtual === 1}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    Primeira
+                  </button>
+                  
+                  <button
+                    onClick={() => setPaginaAtual(prev => Math.max(prev - 1, 1))}
+                    disabled={paginaAtual === 1}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    ← Anterior
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.ceil(agendamentos.length / agendamentosPorPagina) }, (_, i) => i + 1)
+                      .filter(page => {
+                        // Mostrar apenas páginas próximas à atual
+                        return page === 1 || 
+                               page === Math.ceil(agendamentos.length / agendamentosPorPagina) || 
+                               Math.abs(page - paginaAtual) <= 1
+                      })
+                      .map((page, index, array) => (
+                        <div key={page} className="flex items-center">
+                          {index > 0 && array[index - 1] !== page - 1 && (
+                            <span className="px-2 text-gray-500">...</span>
+                          )}
+                          <button
+                            onClick={() => setPaginaAtual(page)}
+                            className={`px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                              paginaAtual === page
+                                ? 'bg-[#6EC1E4] text-white'
+                                : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-100'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+
+                  <button
+                    onClick={() => setPaginaAtual(prev => Math.min(prev + 1, Math.ceil(agendamentos.length / agendamentosPorPagina)))}
+                    disabled={paginaAtual === Math.ceil(agendamentos.length / agendamentosPorPagina)}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    Próxima →
+                  </button>
+
+                  <button
+                    onClick={() => setPaginaAtual(Math.ceil(agendamentos.length / agendamentosPorPagina))}
+                    disabled={paginaAtual === Math.ceil(agendamentos.length / agendamentosPorPagina)}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    Última
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1244,7 +1894,22 @@ export default function PainelAdmin() {
                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                           />
                         ) : (
-                          <span className="text-gray-900">{cliente.telefone}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-900">{cliente.telefone}</span>
+                            {cliente.telefone && (
+                              <a
+                                href={`https://wa.me/55${cliente.telefone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-green-600 hover:text-green-800 transition-colors"
+                                title="Abrir WhatsApp"
+                              >
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                                </svg>
+                              </a>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1360,7 +2025,7 @@ export default function PainelAdmin() {
             </div>
           </div>
           </>
-        ) : abaAtiva === 'servicos' ? (
+        ) : abaAtiva === 'administracao' && subAbaAdmin === 'servicos' ? (
           /* Aba de Serviços */
           <div className="space-y-6">
             {/* Formulário para adicionar novo serviço */}
@@ -1378,14 +2043,23 @@ export default function PainelAdmin() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Duração (minutos)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Duração (minutos)
+                    <span className="text-xs text-gray-500 ml-2">⏱️ Bloqueia múltiplos horários na agenda</span>
+                  </label>
                   <input
                     type="number"
                     required
+                    min="30"
+                    step="30"
                     value={novoServico.duracao}
                     onChange={(e) => setNovoServico({ ...novoServico, duracao: e.target.value })}
+                    placeholder="Ex: 60, 90, 120..."
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Serviços de 60min bloqueiam 2 horários (2x30min). Serviços de 90min bloqueiam 3 horários (3x30min).
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Preço (R$)</label>
@@ -1522,12 +2196,20 @@ export default function PainelAdmin() {
                               </button>
                             </td>
                             <td className="px-6 py-4">
-                              <button
-                                onClick={() => setEditandoServico(servico.id)}
-                                className="text-[#6EC1E4] hover:text-[#5ab0d3] text-sm font-semibold"
-                              >
-                                Editar
-                              </button>
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => setEditandoServico(servico.id)}
+                                  className="text-[#6EC1E4] hover:text-[#5ab0d3] text-sm font-semibold"
+                                >
+                                  ✏️ Editar
+                                </button>
+                                <button
+                                  onClick={() => handleExcluirServico(servico.id)}
+                                  className="text-red-600 hover:text-red-800 text-sm font-semibold"
+                                >
+                                  🗑️ Excluir
+                                </button>
+                              </div>
                             </td>
                           </>
                         )}
@@ -1540,8 +2222,235 @@ export default function PainelAdmin() {
         </div>
         ) : null}
 
+        {/* Aba de Equipe/Colaboradores */}
+        {abaAtiva === 'administracao' && subAbaAdmin === 'equipe' && (
+          <div className="space-y-6">
+            {/* Formulário de Novo Colaborador */}
+            <div className="bg-white rounded-2xl shadow-xl p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">
+                {editandoColaborador ? 'Editar Colaborador' : 'Adicionar Novo Colaborador'}
+              </h2>
+              <form onSubmit={editandoColaborador ? handleEditarColaborador : handleCriarColaborador} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Nome *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editandoColaborador ? editandoColaborador.nome : novoColaborador.nome}
+                      onChange={(e) => editandoColaborador 
+                        ? setEditandoColaborador({ ...editandoColaborador, nome: e.target.value })
+                        : setNovoColaborador({ ...novoColaborador, nome: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
+                      placeholder="Ex: Juliana Silva"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+                    <input
+                      type="email"
+                      required
+                      value={editandoColaborador ? editandoColaborador.email : novoColaborador.email}
+                      onChange={(e) => editandoColaborador 
+                        ? setEditandoColaborador({ ...editandoColaborador, email: e.target.value })
+                        : setNovoColaborador({ ...novoColaborador, email: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
+                      placeholder="juliana@exemplo.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Telefone</label>
+                    <input
+                      type="tel"
+                      value={editandoColaborador ? editandoColaborador.telefone : novoColaborador.telefone}
+                      onChange={(e) => editandoColaborador 
+                        ? setEditandoColaborador({ ...editandoColaborador, telefone: e.target.value })
+                        : setNovoColaborador({ ...novoColaborador, telefone: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
+                      placeholder="(00) 00000-0000"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Especialidade</label>
+                    <input
+                      type="text"
+                      value={editandoColaborador ? editandoColaborador.especialidade : novoColaborador.especialidade}
+                      onChange={(e) => editandoColaborador 
+                        ? setEditandoColaborador({ ...editandoColaborador, especialidade: e.target.value })
+                        : setNovoColaborador({ ...novoColaborador, especialidade: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
+                      placeholder="Ex: Estética Facial"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Serviços que o colaborador pode realizar *</label>
+                  {servicos.length === 0 ? (
+                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+                      ⚠️ Nenhum serviço cadastrado. Cadastre serviços na aba "Serviços" antes de adicionar colaboradores.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        {servicos.map(servico => (
+                          <label key={servico.id} className={`flex items-center space-x-2 cursor-pointer hover:bg-white p-2 rounded transition-colors ${!servico.ativo ? 'opacity-50' : ''}`}>
+                            <input
+                              type="checkbox"
+                              checked={editandoColaborador 
+                                ? (editandoColaborador.servicosIds || []).includes(servico.id)
+                                : (novoColaborador.servicosIds || []).includes(servico.id)
+                              }
+                              onChange={() => handleToggleServicoColaborador(servico.id)}
+                              className="w-4 h-4 text-[#6EC1E4] border-gray-300 rounded focus:ring-[#6EC1E4]"
+                            />
+                            <span className="text-sm text-gray-700 flex-1">
+                              {servico.nome}
+                              {!servico.ativo && <span className="ml-2 text-xs text-red-500">(Inativo)</span>}
+                            </span>
+                            <span className="text-xs text-gray-500">{servico.duracao}min</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        ✓ Selecione os serviços que este profissional está qualificado para realizar
+                        {servicos.some(s => !s.ativo) && <span className="ml-2 text-yellow-600">• Serviços inativos estão disponíveis mas aparecem com opacidade</span>}
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    className="bg-[#6EC1E4] text-white px-6 py-2 rounded-lg hover:bg-[#5ab0d3] transition-all font-semibold"
+                  >
+                    {editandoColaborador ? 'Atualizar Colaborador' : 'Adicionar Colaborador'}
+                  </button>
+                  {editandoColaborador && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditandoColaborador(null)
+                        setNovoColaborador({ nome: '', email: '', telefone: '', especialidade: '', servicosIds: [] })
+                      }}
+                      className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400 transition-all font-semibold"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            {/* Lista de Colaboradores */}
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-800">
+                  Equipe ({colaboradores.length})
+                </h2>
+              </div>
+
+              {colaboradores.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  Nenhum colaborador cadastrado
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Colaborador
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Contato
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Especialidade
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Serviços
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {colaboradores.map((colaborador) => (
+                        <tr key={colaborador.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-gray-900">{colaborador.nome}</div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500">
+                            <div>{colaborador.email}</div>
+                            <div className="text-xs">{colaborador.telefone || 'N/A'}</div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500">
+                            {colaborador.especialidade || '-'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500">
+                            {colaborador.servicosNomes && colaborador.servicosNomes.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {colaborador.servicosNomes.map((nome, idx) => (
+                                  <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                                    {nome}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic">Nenhum serviço atribuído</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => handleToggleColaboradorStatus(colaborador.id, colaborador.ativo)}
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                colaborador.ativo
+                                  ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                                  : 'bg-red-100 text-red-800 hover:bg-red-200'
+                              }`}
+                            >
+                              {colaborador.ativo ? 'Ativo' : 'Inativo'}
+                            </button>
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium space-x-3">
+                            <button
+                              onClick={() => setEditandoColaborador(colaborador)}
+                              className="text-[#6EC1E4] hover:text-[#5ab0d3] font-semibold"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleExcluirColaborador(colaborador.id)}
+                              className="text-red-600 hover:text-red-800 font-semibold"
+                            >
+                              Excluir
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Aba de Faturamento */}
-        {abaAtiva === 'faturamento' && (
+        {abaAtiva === 'administracao' && subAbaAdmin === 'faturamento' && (
           <div className="space-y-6">
             {/* Seletor de Mês */}
             <div className="bg-white rounded-2xl shadow-xl p-6">
@@ -1715,6 +2624,151 @@ export default function PainelAdmin() {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Aba de Configurações */}
+        {abaAtiva === 'administracao' && subAbaAdmin === 'configuracoes' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl shadow-xl p-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <span>⚙️</span>
+                <span>Configurações do Sistema</span>
+              </h2>
+
+              <div className="space-y-6">
+                {/* Horários de Funcionamento */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">🕐 Horários de Funcionamento</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Horário de Abertura</label>
+                      <input
+                        type="time"
+                        value={configuracoes.horario_abertura}
+                        onChange={(e) => setConfiguracoes({ ...configuracoes, horario_abertura: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Horário de Fechamento</label>
+                      <input
+                        type="time"
+                        value={configuracoes.horario_fechamento}
+                        onChange={(e) => setConfiguracoes({ ...configuracoes, horario_fechamento: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Intervalo (minutos)</label>
+                      <select
+                        value={configuracoes.intervalo_agendamento}
+                        onChange={(e) => setConfiguracoes({ ...configuracoes, intervalo_agendamento: parseInt(e.target.value) })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
+                      >
+                        <option value="15">15 minutos</option>
+                        <option value="30">30 minutos</option>
+                        <option value="60">60 minutos</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dias de Funcionamento */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">📅 Dias de Funcionamento</h3>
+                  <div className="flex flex-wrap gap-3">
+                    {[
+                      { valor: '0', nome: 'Domingo' },
+                      { valor: '1', nome: 'Segunda' },
+                      { valor: '2', nome: 'Terça' },
+                      { valor: '3', nome: 'Quarta' },
+                      { valor: '4', nome: 'Quinta' },
+                      { valor: '5', nome: 'Sexta' },
+                      { valor: '6', nome: 'Sábado' }
+                    ].map(dia => (
+                      <button
+                        key={dia.valor}
+                        type="button"
+                        onClick={() => {
+                          const dias = configuracoes.dias_funcionamento || []
+                          if (dias.includes(dia.valor)) {
+                            setConfiguracoes({
+                              ...configuracoes,
+                              dias_funcionamento: dias.filter(d => d !== dia.valor)
+                            })
+                          } else {
+                            setConfiguracoes({
+                              ...configuracoes,
+                              dias_funcionamento: [...dias, dia.valor]
+                            })
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                          (configuracoes.dias_funcionamento || []).includes(dia.valor)
+                            ? 'bg-[#6EC1E4] text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        {dia.nome}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Selecione os dias em que a empresa funciona. Clientes não poderão agendar em dias não selecionados.
+                  </p>
+                </div>
+
+                {/* Antecedência Máxima */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">⏰ Antecedência de Agendamentos</h3>
+                  <div className="max-w-md">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Máximo de dias de antecedência
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="365"
+                      value={configuracoes.dias_antecedencia_max}
+                      onChange={(e) => setConfiguracoes({ ...configuracoes, dias_antecedencia_max: parseInt(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Clientes poderão agendar com até <strong>{configuracoes.dias_antecedencia_max} dias</strong> de antecedência.
+                      Por exemplo, se configurar 30 dias, não será possível agendar para datas além de 1 mês no futuro.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Preview das Configurações */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-blue-900 mb-2">📋 Resumo das Configurações</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• Funcionamento: <strong>{configuracoes.horario_abertura}</strong> às <strong>{configuracoes.horario_fechamento}</strong></li>
+                    <li>• Intervalo entre agendamentos: <strong>{configuracoes.intervalo_agendamento} minutos</strong></li>
+                    <li>• Dias de funcionamento: <strong>
+                      {(configuracoes.dias_funcionamento || []).map(d => 
+                        ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][parseInt(d)]
+                      ).join(', ')}
+                    </strong></li>
+                    <li>• Agendamentos permitidos com até: <strong>{configuracoes.dias_antecedencia_max} dias</strong> de antecedência</li>
+                  </ul>
+                </div>
+
+                {/* Botão Salvar */}
+                <div className="flex justify-end pt-4">
+                  <button
+                    onClick={salvarConfiguracoes}
+                    className="bg-[#6EC1E4] text-white px-8 py-3 rounded-lg hover:bg-[#5ab0d3] transition-all font-semibold text-lg shadow-lg"
+                  >
+                    💾 Salvar Configurações
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

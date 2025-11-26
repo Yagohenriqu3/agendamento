@@ -5,11 +5,57 @@ import mysql from 'mysql2/promise'
 import nodemailer from 'nodemailer'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import rateLimit from 'express-rate-limit'
+import { validate, registroSchema, loginSchema, agendamentoSchema, servicoSchema, colaboradorSchema } from './validation.js'
 
 dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3001
+const JWT_SECRET = process.env.JWT_SECRET || 'seu-secret-super-seguro-mude-isso-em-producao'
+
+// Rate limiting para prevenir ataques de força bruta
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 5, // 5 tentativas
+  message: 'Muitas tentativas de login. Tente novamente em 15 minutos.',
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100, // 100 requisições por 15 minutos
+  message: 'Muitas requisições. Tente novamente mais tarde.',
+})
+
+// Middleware de autenticação JWT
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1]
+
+  if (!token) {
+    return res.status(401).json({ error: 'Token não fornecido' })
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Token inválido ou expirado' })
+    }
+    req.user = user
+    next()
+  })
+}
+
+// Middleware para verificar se é admin
+function isAdmin(req, res, next) {
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Acesso negado. Apenas administradores.' })
+  }
+  next()
+}
 
 // Necessário para usar __dirname no ES Modules
 const __filename = fileURLToPath(import.meta.url)
@@ -254,51 +300,36 @@ function emailAgendamentoReagendado(nome, dataAntiga, horarioAntigo, dataNova, h
   `
 }
 
-// Configurar CORS para permitir ngrok e localhost
+// Configurar CORS com whitelist
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3001']
+
 app.use(cors({
-  origin: true, // Permite qualquer origem (necessário para ngrok)
+  origin: function (origin, callback) {
+    // Permitir requisições sem origin (mobile apps, postman, etc)
+    if (!origin) return callback(null, true)
+    
+    // Permitir ngrok em desenvolvimento (domínios .ngrok-free.app ou .ngrok.io)
+    if (origin.includes('.ngrok-free.app') || origin.includes('.ngrok.io')) {
+      return callback(null, true)
+    }
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'A política de CORS não permite acesso desta origem.'
+      return callback(new Error(msg), false)
+    }
+    return callback(null, true)
+  },
   credentials: true
 }))
 app.use(express.json())
+app.use('/api', apiLimiter) // Rate limiting para todas as rotas da API
 
 // ==================== ROTAS DE ADMIN ====================
 
-// Login unificado (clientes e admin)
-app.post('/api/cliente/login', async (req, res) => {
-  try {
-    const { email, password } = req.body
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email e senha são obrigatórios' })
-    }
-
-    const [clientes] = await pool.query(
-      'SELECT * FROM Cliente WHERE email = ? AND password = ?',
-      [email, password]
-    )
-
-    if (clientes.length === 0) {
-      return res.status(401).json({ error: 'Email ou senha inválidos' })
-    }
-
-    const cliente = clientes[0]
-
-    // Verificar se o cliente está bloqueado
-    if (cliente.bloqueado && !cliente.isAdmin) {
-      return res.status(403).json({ error: 'Sua conta foi bloqueada. Entre em contato com o administrador.' })
-    }
-
-    res.json({
-      token: `cliente_${cliente.id}_${Date.now()}`,
-      nome: cliente.nome,
-      email: cliente.email,
-      isAdmin: Boolean(cliente.isAdmin)
-    })
-  } catch (error) {
-    console.error('Erro ao fazer login:', error)
-    res.status(500).json({ error: 'Erro ao fazer login' })
-  }
-})
+// Login unificado (clientes e admin) - DESCONTINUADO - Use /api/cliente/login abaixo
+// Esta rota será removida em versões futuras
 
 // Buscar dados do cliente
 app.get('/api/cliente/dados', async (req, res) => {
@@ -1113,7 +1144,7 @@ app.get('/api/colaboradores/servico/:servicoId', async (req, res) => {
 // ==================== ROTAS PÚBLICAS ====================
 
 // Registro de cliente
-app.post('/api/cliente/registro', async (req, res) => {
+app.post('/api/cliente/registro', authLimiter, validate(registroSchema), async (req, res) => {
   try {
     const { nome, email, telefone, password } = req.body
 
@@ -1135,16 +1166,27 @@ app.post('/api/cliente/registro', async (req, res) => {
       return res.status(409).json({ error: 'Este email já está cadastrado' })
     }
 
+    // Hash da senha com bcrypt (10 rounds)
+    const hashedPassword = await bcrypt.hash(password, 10)
+
     // Criar cliente
     const [result] = await pool.query(
       'INSERT INTO Cliente (nome, email, telefone, password, createdAt) VALUES (?, ?, ?, ?, NOW())',
-      [nome, email, telefone, password]
+      [nome, email, telefone, hashedPassword]
+    )
+
+    // Gerar token JWT
+    const token = jwt.sign(
+      { id: result.insertId, email, isAdmin: false },
+      JWT_SECRET,
+      { expiresIn: '7d' }
     )
 
     res.status(201).json({
-      token: `cliente_${result.insertId}_${Date.now()}`,
+      token,
       nome,
-      email
+      email,
+      isAdmin: false
     })
   } catch (error) {
     console.error('Erro ao registrar cliente:', error)
@@ -1153,7 +1195,7 @@ app.post('/api/cliente/registro', async (req, res) => {
 })
 
 // Login de cliente
-app.post('/api/cliente/login', async (req, res) => {
+app.post('/api/cliente/login', authLimiter, validate(loginSchema), async (req, res) => {
   try {
     const { email, password } = req.body
 
@@ -1162,8 +1204,8 @@ app.post('/api/cliente/login', async (req, res) => {
     }
 
     const [clientes] = await pool.query(
-      'SELECT * FROM Cliente WHERE email = ? AND password = ?',
-      [email, password]
+      'SELECT * FROM Cliente WHERE email = ?',
+      [email]
     )
 
     if (clientes.length === 0) {
@@ -1172,10 +1214,30 @@ app.post('/api/cliente/login', async (req, res) => {
 
     const cliente = clientes[0]
 
+    // Verificar bloqueio
+    if (cliente.bloqueado) {
+      return res.status(403).json({ error: 'Cliente bloqueado. Entre em contato com a administração.' })
+    }
+
+    // Verificar senha com bcrypt
+    const senhaValida = await bcrypt.compare(password, cliente.password)
+
+    if (!senhaValida) {
+      return res.status(401).json({ error: 'Email ou senha inválidos' })
+    }
+
+    // Gerar token JWT
+    const token = jwt.sign(
+      { id: cliente.id, email: cliente.email, isAdmin: cliente.isAdmin || false },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    )
+
     res.json({
-      token: `cliente_${cliente.id}_${Date.now()}`,
+      token,
       nome: cliente.nome,
-      email: cliente.email
+      email: cliente.email,
+      isAdmin: cliente.isAdmin || false
     })
   } catch (error) {
     console.error('Erro ao fazer login:', error)

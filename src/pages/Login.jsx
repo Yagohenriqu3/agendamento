@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import NavMenu from '../componentes/NavMenu'
 import API_URL from '../config/api'
 
@@ -8,7 +9,6 @@ export default function Login() {
     username: '',
     password: ''
   })
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
@@ -22,8 +22,9 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError('')
     setLoading(true)
+
+    const loadingToast = toast.loading('Entrando...')
 
     try {
       const response = await fetch(`${API_URL}/admin/login`, {
@@ -44,12 +45,14 @@ export default function Login() {
       localStorage.setItem('adminToken', data.token)
       localStorage.setItem('adminNome', data.nome)
       
+      toast.success('✅ Login realizado com sucesso!', { id: loadingToast })
+      
       // Redirecionar para o painel
       navigate('/admin/painel')
       
     } catch (error) {
       console.error('Erro ao fazer login:', error)
-      setError(error.message)
+      toast.error(error.message, { id: loadingToast })
     } finally {
       setLoading(false)
     }
@@ -71,12 +74,6 @@ export default function Login() {
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                {error}
-              </div>
-            )}
-
             <div>
               <label htmlFor="username" className="block text-gray-700 font-semibold mb-2">
                 Usuário

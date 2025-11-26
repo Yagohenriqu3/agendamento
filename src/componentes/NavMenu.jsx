@@ -66,55 +66,28 @@ export default function NavMenu() {
                 <nav className="hidden md:flex flex-1 justify-center" aria-label="Navegação principal">
                     <ul className="flex items-center gap-2 text-[#6EC1E4] font-semibold">
                         <li>
-                            {isHomePage ? (
-                              <a 
-                                href="#home" 
-                                className="px-5 py-2 rounded-lg transition-all duration-300 hover:bg-[#6EC1E4] hover:text-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] focus:ring-offset-2"
-                              >
-                                  Home
-                              </a>
-                            ) : (
-                              <Link 
+                            <Link 
                                 to="/" 
                                 className="px-5 py-2 rounded-lg transition-all duration-300 hover:bg-[#6EC1E4] hover:text-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] focus:ring-offset-2"
                               >
                                   Home
                               </Link>
-                            )}
                         </li>
                         <li>
-                            {isHomePage ? (
-                              <a 
-                                href="#sobre" 
-                                className="px-5 py-2 rounded-lg transition-all duration-300 hover:bg-[#6EC1E4] hover:text-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] focus:ring-offset-2"
-                              >
-                                  Sobre a Clínica
-                              </a>
-                            ) : (
-                              <Link 
+                            <Link 
                                 to="/sobre-nos" 
                                 className="px-5 py-2 rounded-lg transition-all duration-300 hover:bg-[#6EC1E4] hover:text-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] focus:ring-offset-2"
                               >
                                   Sobre a Clínica
                               </Link>
-                            )}
                         </li>
                         <li>
-                            {isHomePage ? (
-                              <a 
-                                href="#servicos" 
-                                className="px-5 py-2 rounded-lg transition-all duration-300 hover:bg-[#6EC1E4] hover:text-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] focus:ring-offset-2"
-                              >
-                                  Serviços
-                              </a>
-                            ) : (
-                              <Link 
-                                to="/#servicos" 
+                            <Link 
+                                to="/servicos" 
                                 className="px-5 py-2 rounded-lg transition-all duration-300 hover:bg-[#6EC1E4] hover:text-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#6EC1E4] focus:ring-offset-2"
                               >
                                   Serviços
                               </Link>
-                            )}
                         </li>
                         <li>
                             <Link 

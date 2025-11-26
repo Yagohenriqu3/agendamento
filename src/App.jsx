@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Home from './Home.jsx'
 import Agendamento from './pages/Agendamento.jsx'
 import SobreNos from './pages/SobreNos.jsx'
+import Servicos from './pages/Servicos.jsx'
 import LoginCliente from './pages/LoginCliente.jsx'
 import PainelAdmin from './pages/PainelAdmin.jsx'
 import MeusDados from './pages/MeusDados.jsx'
@@ -21,6 +22,7 @@ function App() {
         <Route path="/login-cliente" element={<LoginCliente />} />
         <Route path="/agendamento" element={<Agendamento />} />
         <Route path="/sobre-nos" element={<SobreNos />} />
+        <Route path="/servicos" element={<Servicos />} />
         <Route path="/meus-dados" element={<MeusDados />} />
         <Route path="/meus-agendamentos" element={<MeusAgendamentos />} />
         <Route path="/ficha-anamnese" element={<FichaAnamnese />} />

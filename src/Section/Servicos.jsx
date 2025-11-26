@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function Servicos() {
   return (
-    <section className=" py-16 px-4 md:px-16 mb-20">
+    <section id="servicos" className=" py-16 px-4 md:px-16 mb-20">
       {/* Título da seção */}
       <div className="text-center mb-12">
         <h2 className="text-4xl font-bold text-[#6EC1E4] mb-4">

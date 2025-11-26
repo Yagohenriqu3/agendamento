@@ -2,7 +2,7 @@ import recepcao from '../assets/ChatGPT Image 4 de out. de 2025, 10_32_26.png'
 
 export default function Sobre() {
   return (
-    <section className="md:flex justify-center md:p-10 h-auto mb-20  ">
+    <section id="sobre" className="md:flex justify-center md:p-10 h-auto mb-20  ">
         <div>
             <img src={recepcao} alt="recepça" className='h-full' />
         </div>

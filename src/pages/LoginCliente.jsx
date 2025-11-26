@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import NavMenu from '../componentes/NavMenu'
 import API_URL from '../config/api'
 
@@ -11,7 +12,6 @@ export default function LoginCliente() {
     telefone: '',
     password: ''
   })
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
@@ -25,8 +25,9 @@ export default function LoginCliente() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError('')
     setLoading(true)
+
+    const loadingToast = toast.loading(isLogin ? 'Entrando...' : 'Criando conta...')
 
     try {
       const endpoint = isLogin ? '/cliente/login' : '/cliente/registro'
@@ -50,6 +51,8 @@ export default function LoginCliente() {
       localStorage.setItem('clienteEmail', data.email)
       localStorage.setItem('isAdmin', data.isAdmin)
       
+      toast.success(isLogin ? '✅ Login realizado!' : '✅ Conta criada com sucesso!', { id: loadingToast })
+      
       // Redirecionar baseado no tipo de usuário
       if (data.isAdmin) {
         navigate('/admin/painel')
@@ -59,7 +62,7 @@ export default function LoginCliente() {
       
     } catch (error) {
       console.error('Erro:', error)
-      setError(error.message)
+      toast.error(error.message, { id: loadingToast })
     } finally {
       setLoading(false)
     }
@@ -81,12 +84,6 @@ export default function LoginCliente() {
 
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                  {error}
-                </div>
-              )}
-
               {!isLogin && (
                 <div>
                   <label htmlFor="nome" className="block text-gray-700 font-semibold mb-2">

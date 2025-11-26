@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import NavMenu from '../componentes/NavMenu'
+import API_URL from '../config/api'
 
 export default function PainelAdmin() {
   const [agendamentos, setAgendamentos] = useState([])
@@ -13,7 +15,11 @@ export default function PainelAdmin() {
     horario_fechamento: '18:00',
     dias_funcionamento: ['1','2','3','4','5','6'],
     dias_antecedencia_max: 30,
-    intervalo_agendamento: 30
+    intervalo_agendamento: 30,
+    intervalo_almoco_ativo: false,
+    intervalo_almoco_inicio: '12:00',
+    intervalo_almoco_fim: '13:00',
+    mostrar_valores_cliente: true
   })
   const [filtroData, setFiltroData] = useState('')
   const [filtroCliente, setFiltroCliente] = useState('')
@@ -58,8 +64,6 @@ export default function PainelAdmin() {
   const [menuAberto, setMenuAberto] = useState(false)
   const [observacoesExpandidas, setObservacoesExpandidas] = useState({})
   const navigate = useNavigate()
-
-  const API_URL = 'http://localhost:3001/api'
 
   useEffect(() => {
     // Verificar se está autenticado e é admin
@@ -163,6 +167,13 @@ export default function PainelAdmin() {
     try {
       const response = await fetch(`${API_URL}/admin/clientes`)
       const dados = await response.json()
+      console.log('Clientes carregados:', dados)
+      console.log('Clientes com ficha:', dados.filter(c => c.fichaAnamnese && c.fichaAnamnese.trim() !== ''))
+      dados.forEach(cliente => {
+        if (cliente.fichaAnamnese) {
+          console.log(`Cliente ${cliente.nome}: fichaAnamnese = "${cliente.fichaAnamnese.substring(0, 50)}..."`)
+        }
+      })
       setClientes(dados)
     } catch (error) {
       console.error('Erro ao carregar clientes:', error)
@@ -806,8 +817,10 @@ export default function PainelAdmin() {
   const dataHoje = new Date().toISOString().split('T')[0]
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-[#EAF6F6] to-white py-8">
-      <div className="container mx-auto px-4 max-w-7xl">
+    <>
+      <NavMenu />
+      <div className="min-h-screen bg-linear-to-b from-[#EAF6F6] to-white py-8">
+        <div className="container mx-auto px-4 max-w-7xl">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-xl p-4 md:p-6 mb-6">
           <div className="flex justify-between items-center gap-4">
@@ -1213,8 +1226,8 @@ export default function PainelAdmin() {
 
             {/* Modal de Reagendamento */}
             {reagendando && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-2xl shadow-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="fixed inset-0 bg-white bg-opacity-95 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-2xl border-2 border-blue-200 p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                   <h3 className="text-xl font-bold text-gray-800 mb-4">
                     Reagendar: {reagendando.clienteNome}
                   </h3>
@@ -1335,8 +1348,8 @@ export default function PainelAdmin() {
 
             {/* Modal de Detalhes dos Serviços Múltiplos */}
             {detalhesServicosModal && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-2xl shadow-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="fixed inset-0 bg-white bg-opacity-95 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-2xl border-2 border-blue-200 p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                   <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-bold text-gray-800">
                       Detalhes do Agendamento
@@ -1930,14 +1943,27 @@ export default function PainelAdmin() {
           <>
             {clienteSelecionado ? (
               /* Modal de Histórico do Cliente */
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-2xl shadow-xl p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
+              <div className="fixed inset-0 bg-white bg-opacity-95 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-2xl border-2 border-purple-200 p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="flex-1">
                       <h2 className="text-2xl font-bold text-gray-800">
                         Histórico de {clienteSelecionado.nome}
                       </h2>
                       <p className="text-gray-600">{clienteSelecionado.email} | {clienteSelecionado.telefone}</p>
+                      
+                      {/* Botão Ficha de Anamnese */}
+                      {clienteSelecionado.fichaAnamnese && (
+                        <button
+                          onClick={() => {
+                            const ficha = JSON.parse(clienteSelecionado.fichaAnamnese)
+                            setClienteSelecionado({ ...clienteSelecionado, mostrarFicha: true, fichaData: ficha })
+                          }}
+                          className="mt-3 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm font-semibold"
+                        >
+                          📋 Ver Ficha de Anamnese
+                        </button>
+                      )}
                     </div>
                     <button
                       onClick={() => {
@@ -1950,14 +1976,121 @@ export default function PainelAdmin() {
                     </button>
                   </div>
 
-                  {loading ? (
-                    <div className="text-center py-8 text-gray-500">Carregando histórico...</div>
-                  ) : historicoCliente.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">Nenhum procedimento registrado</div>
+                  {clienteSelecionado.mostrarFicha ? (
+                    /* Visualização da Ficha de Anamnese */
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center border-b pb-4">
+                        <h3 className="text-xl font-bold text-purple-600">Ficha de Anamnese</h3>
+                        <button
+                          onClick={() => setClienteSelecionado({ ...clienteSelecionado, mostrarFicha: false })}
+                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        >
+                          ← Voltar ao Histórico
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Dados Pessoais */}
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="font-semibold text-gray-800 mb-2">Dados Pessoais</h4>
+                          <div className="space-y-1 text-sm">
+                            <p><strong>Idade:</strong> {clienteSelecionado.fichaData.idade}</p>
+                            <p><strong>Profissão:</strong> {clienteSelecionado.fichaData.profissao}</p>
+                            <p><strong>Como soube:</strong> {clienteSelecionado.fichaData.comoSoube}</p>
+                          </div>
+                        </div>
+
+                        {/* Queixa Principal */}
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="font-semibold text-gray-800 mb-2">Queixa Principal</h4>
+                          <div className="space-y-1 text-sm">
+                            <p><strong>Motivo:</strong> {clienteSelecionado.fichaData.motivoTratamento}</p>
+                            <p><strong>Tempo:</strong> {clienteSelecionado.fichaData.tempoQueixa}</p>
+                          </div>
+                        </div>
+
+                        {/* Histórico de Saúde */}
+                        <div className="bg-red-50 p-4 rounded-lg col-span-1 md:col-span-2">
+                          <h4 className="font-semibold text-red-800 mb-2">⚠️ Histórico de Saúde</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                            {clienteSelecionado.fichaData.doencas.hipertensao && <span className="text-red-700">• Hipertensão</span>}
+                            {clienteSelecionado.fichaData.doencas.diabetes && <span className="text-red-700">• Diabetes</span>}
+                            {clienteSelecionado.fichaData.doencas.problemasCardiacos && <span className="text-red-700">• Problemas cardíacos</span>}
+                            {clienteSelecionado.fichaData.doencas.alergiaMedicamentos && (
+                              <span className="text-red-700">• Alergia: {clienteSelecionado.fichaData.doencas.alergiaDescricao}</span>
+                            )}
+                            {clienteSelecionado.fichaData.doencas.problemasTireoide && <span className="text-red-700">• Tireoide</span>}
+                            {clienteSelecionado.fichaData.doencas.trombose && <span className="text-red-700">• Trombose</span>}
+                          </div>
+                        </div>
+
+                        {/* Medicamentos */}
+                        {clienteSelecionado.fichaData.medicamentosContinuos && (
+                          <div className="bg-yellow-50 p-4 rounded-lg col-span-1 md:col-span-2">
+                            <h4 className="font-semibold text-yellow-800 mb-2">💊 Medicamentos</h4>
+                            <p className="text-sm">{clienteSelecionado.fichaData.medicamentosContinuos}</p>
+                          </div>
+                        )}
+
+                        {/* Hábitos */}
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="font-semibold text-gray-800 mb-2">Hábitos de Vida</h4>
+                          <div className="space-y-1 text-sm">
+                            <p><strong>Fuma:</strong> {clienteSelecionado.fichaData.fuma}</p>
+                            <p><strong>Álcool:</strong> {clienteSelecionado.fichaData.bebeAlcool}</p>
+                            <p><strong>Atividade física:</strong> {clienteSelecionado.fichaData.atividadeFisica || 'Não informado'}</p>
+                            <p><strong>Sono:</strong> {clienteSelecionado.fichaData.qualidadeSono}</p>
+                          </div>
+                        </div>
+
+                        {/* Pele */}
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="font-semibold text-gray-800 mb-2">Condições da Pele</h4>
+                          <div className="space-y-1 text-sm">
+                            <p><strong>Tipo:</strong> {clienteSelecionado.fichaData.tipoPele}</p>
+                            <p><strong>Cor:</strong> {clienteSelecionado.fichaData.corPele}</p>
+                            <p><strong>Exposição solar:</strong> {clienteSelecionado.fichaData.exposicaoSolar}</p>
+                          </div>
+                        </div>
+
+                        {/* Contraindicações */}
+                        <div className="bg-red-50 p-4 rounded-lg col-span-1 md:col-span-2">
+                          <h4 className="font-semibold text-red-800 mb-2">🚫 Contraindicações</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                            {clienteSelecionado.fichaData.contraindicacoes.marcapasso && <span className="text-red-700">• Marcapasso</span>}
+                            {clienteSelecionado.fichaData.contraindicacoes.metalCorpo && <span className="text-red-700">• Metal no corpo</span>}
+                            {clienteSelecionado.fichaData.contraindicacoes.epilepsia && <span className="text-red-700">• Epilepsia</span>}
+                            {clienteSelecionado.fichaData.contraindicacoes.infeccoesAtivas && <span className="text-red-700">• Infecções ativas</span>}
+                            {clienteSelecionado.fichaData.gestanteAmamentando === 'sim' && <span className="text-red-700">• Gestante/Amamentando</span>}
+                          </div>
+                        </div>
+
+                        {/* Objetivos */}
+                        {clienteSelecionado.fichaData.objetivoFacial?.length > 0 && (
+                          <div className="bg-blue-50 p-4 rounded-lg col-span-1 md:col-span-2">
+                            <h4 className="font-semibold text-blue-800 mb-2">🎯 Objetivos do Tratamento</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {clienteSelecionado.fichaData.objetivoFacial.map((obj, idx) => (
+                                <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                                  {obj}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   ) : (
-                    <div className="space-y-4">
-                      {historicoCliente.map((item) => (
-                        <div key={item.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                    /* Histórico de Agendamentos */
+                    <>
+                      {loading ? (
+                        <div className="text-center py-8 text-gray-500">Carregando histórico...</div>
+                      ) : historicoCliente.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">Nenhum procedimento registrado</div>
+                      ) : (
+                        <div className="space-y-4">
+                          {historicoCliente.map((item) => (
+                            <div key={item.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
                           <div className="flex justify-between items-start mb-3">
                             <div>
                               <h3 className="text-lg font-semibold text-gray-800">{item.servicoNome}</h3>
@@ -2033,18 +2166,8 @@ export default function PainelAdmin() {
                       ))}
                     </div>
                   )}
-
-                  <div className="mt-6 flex justify-end">
-                    <button
-                      onClick={() => {
-                        setClienteSelecionado(null)
-                        setHistoricoCliente([])
-                      }}
-                      className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all font-semibold"
-                    >
-                      Fechar
-                    </button>
-                  </div>
+                    </>
+                  )}
                 </div>
               </div>
             ) : null}
@@ -2213,6 +2336,18 @@ export default function PainelAdmin() {
                                     >
                                       📋 Histórico
                                     </button>
+                                    {cliente.fichaAnamnese && cliente.fichaAnamnese.trim() !== '' && (
+                                      <button
+                                        onClick={() => {
+                                          console.log('Abrindo ficha do cliente:', cliente.nome)
+                                          const ficha = JSON.parse(cliente.fichaAnamnese)
+                                          setClienteSelecionado({ ...cliente, mostrarFicha: true, fichaData: ficha })
+                                        }}
+                                        className="text-green-600 hover:text-green-800 font-semibold text-xs"
+                                      >
+                                        📄 Ver Ficha
+                                      </button>
+                                    )}
                                     <button
                                       onClick={() => abrirFormAgendamentoCliente(cliente)}
                                       className="text-[#6EC1E4] hover:text-[#5ab0d3] font-semibold text-xs"
@@ -2247,6 +2382,10 @@ export default function PainelAdmin() {
                                   onChange={(e) => {
                                     const acao = e.target.value
                                     if (acao === 'historico') abrirHistoricoCliente(cliente)
+                                    else if (acao === 'ficha') {
+                                      const ficha = JSON.parse(cliente.fichaAnamnese)
+                                      setClienteSelecionado({ ...cliente, mostrarFicha: true, fichaData: ficha })
+                                    }
                                     else if (acao === 'agendar') abrirFormAgendamentoCliente(cliente)
                                     else if (acao === 'editar') setEditandoCliente(cliente.id)
                                     else if (acao === 'bloquear') handleBloquearCliente(cliente.id, cliente.bloqueado)
@@ -2258,6 +2397,7 @@ export default function PainelAdmin() {
                                 >
                                   <option value="" disabled>Selecione uma ação</option>
                                   <option value="historico">📋 Ver Histórico</option>
+                                  {cliente.fichaAnamnese && cliente.fichaAnamnese.trim() !== '' && <option value="ficha">📄 Ver Ficha de Anamnese</option>}
                                   <option value="agendar">➕ Criar Agendamento</option>
                                   <option value="editar">✏️ Editar Dados</option>
                                   <option value="bloquear">{cliente.bloqueado ? '🔓 Desbloquear' : '🔒 Bloquear'}</option>
@@ -2994,11 +3134,115 @@ export default function PainelAdmin() {
                   </div>
                 </div>
 
+                {/* Intervalo de Almoço */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">🍽️ Intervalo de Almoço</h3>
+                  
+                  {/* Toggle para ativar/desativar */}
+                  <div className="mb-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={configuracoes.intervalo_almoco_ativo}
+                        onChange={(e) => setConfiguracoes({ 
+                          ...configuracoes, 
+                          intervalo_almoco_ativo: e.target.checked 
+                        })}
+                        className="w-5 h-5 text-[#6EC1E4] rounded focus:ring-2 focus:ring-[#6EC1E4]"
+                      />
+                      <span className="text-sm font-medium text-gray-700">
+                        Bloquear horários durante o intervalo de almoço
+                      </span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-2 ml-8">
+                      Quando ativado, os clientes não poderão agendar durante o horário de almoço especificado.
+                    </p>
+                  </div>
+
+                  {/* Horários de almoço (apenas se ativo) */}
+                  {configuracoes.intervalo_almoco_ativo && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-8">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Início do almoço
+                        </label>
+                        <input
+                          type="time"
+                          value={configuracoes.intervalo_almoco_inicio}
+                          onChange={(e) => setConfiguracoes({ ...configuracoes, intervalo_almoco_inicio: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Fim do almoço
+                        </label>
+                        <input
+                          type="time"
+                          value={configuracoes.intervalo_almoco_fim}
+                          onChange={(e) => setConfiguracoes({ ...configuracoes, intervalo_almoco_fim: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6EC1E4] focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Exibição de Valores para Clientes */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">💰 Exibição de Valores</h3>
+                  
+                  <div className="space-y-4">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={configuracoes.mostrar_valores_cliente}
+                        onChange={(e) => setConfiguracoes({ 
+                          ...configuracoes, 
+                          mostrar_valores_cliente: e.target.checked 
+                        })}
+                        className="w-5 h-5 text-[#6EC1E4] rounded focus:ring-2 focus:ring-[#6EC1E4] mt-0.5"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">
+                          Mostrar valores dos serviços para os clientes
+                        </span>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Quando ativado, os clientes verão os preços dos serviços durante o agendamento e no histórico.
+                        </p>
+                      </div>
+                    </label>
+
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <div className="flex items-start gap-2">
+                        <span className="text-yellow-600 text-lg">💡</span>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-yellow-900 text-sm mb-1">Recomendação Importante</h4>
+                          <p className="text-xs text-yellow-800">
+                            Mesmo que você opte por <strong>não mostrar os valores</strong> para os clientes, 
+                            é altamente recomendado <strong>cadastrar os preços dos serviços</strong> no sistema. 
+                            Isso é essencial para:
+                          </p>
+                          <ul className="text-xs text-yellow-800 mt-2 ml-4 space-y-1">
+                            <li>• Gerar relatórios de faturamento precisos</li>
+                            <li>• Acompanhar o desempenho financeiro da clínica</li>
+                            <li>• Ter controle sobre o valor cobrado em cada atendimento</li>
+                            <li>• Facilitar a gestão financeira e planejamento</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Preview das Configurações */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <h4 className="font-semibold text-blue-900 mb-2">📋 Resumo das Configurações</h4>
                   <ul className="text-sm text-blue-800 space-y-1">
                     <li>• Funcionamento: <strong>{configuracoes.horario_abertura}</strong> às <strong>{configuracoes.horario_fechamento}</strong></li>
+                    {configuracoes.intervalo_almoco_ativo && (
+                      <li>• Intervalo de almoço: <strong>{configuracoes.intervalo_almoco_inicio}</strong> às <strong>{configuracoes.intervalo_almoco_fim}</strong></li>
+                    )}
                     <li>• Intervalo entre agendamentos: <strong>{configuracoes.intervalo_agendamento} minutos</strong></li>
                     <li>• Dias de funcionamento: <strong>
                       {(configuracoes.dias_funcionamento || []).map(d => 
@@ -3006,6 +3250,7 @@ export default function PainelAdmin() {
                       ).join(', ')}
                     </strong></li>
                     <li>• Agendamentos permitidos com até: <strong>{configuracoes.dias_antecedencia_max} dias</strong> de antecedência</li>
+                    <li>• Valores visíveis para clientes: <strong>{configuracoes.mostrar_valores_cliente ? 'Sim' : 'Não'}</strong></li>
                   </ul>
                 </div>
 
@@ -3024,5 +3269,7 @@ export default function PainelAdmin() {
         )}
       </div>
     </div>
+    </>
   )
 }
+

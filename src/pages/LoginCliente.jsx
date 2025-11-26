@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import NavMenu from '../componentes/NavMenu'
+import API_URL from '../config/api'
 
 export default function LoginCliente() {
   const [isLogin, setIsLogin] = useState(true)
@@ -13,8 +14,6 @@ export default function LoginCliente() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-
-  const API_URL = 'http://localhost:3001/api'
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -55,7 +54,7 @@ export default function LoginCliente() {
       if (data.isAdmin) {
         navigate('/admin/painel')
       } else {
-        navigate('/agendamento')
+        navigate('/meus-agendamentos')
       }
       
     } catch (error) {

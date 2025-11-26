@@ -6,6 +6,7 @@ import LoginCliente from './pages/LoginCliente.jsx'
 import PainelAdmin from './pages/PainelAdmin.jsx'
 import MeusDados from './pages/MeusDados.jsx'
 import MeusAgendamentos from './pages/MeusAgendamentos.jsx'
+import FichaAnamnese from './pages/FichaAnamnese.jsx'
 import './App.css'
 
 
@@ -17,10 +18,12 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<LoginCliente />} />
+        <Route path="/login-cliente" element={<LoginCliente />} />
         <Route path="/agendamento" element={<Agendamento />} />
         <Route path="/sobre-nos" element={<SobreNos />} />
         <Route path="/meus-dados" element={<MeusDados />} />
         <Route path="/meus-agendamentos" element={<MeusAgendamentos />} />
+        <Route path="/ficha-anamnese" element={<FichaAnamnese />} />
         <Route path="/admin/painel" element={<PainelAdmin />} />
       </Routes>
     </Router>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import API_URL from '../config/api'
 
 export default function MeusDados() {
   const [cliente, setCliente] = useState(null)
@@ -12,8 +13,6 @@ export default function MeusDados() {
   })
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
-
-  const API_URL = 'http://localhost:3001/api'
 
   useEffect(() => {
     const token = localStorage.getItem('clienteToken')

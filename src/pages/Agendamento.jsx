@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import NavMenu from '../componentes/NavMenu'
+import API_URL from '../config/api'
 
 export default function Agendamento() {
   const [servicos, setServicos] = useState([])
@@ -21,8 +22,6 @@ export default function Agendamento() {
     observacoes: ''
   })
   const [servicosSelecionados, setServicosSelecionados] = useState([])
-
-  const API_URL = 'http://localhost:3001/api'
 
   useEffect(() => {
     // Verificar se o cliente está logado

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import NavMenu from '../componentes/NavMenu'
+import API_URL from '../config/api'
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -9,8 +11,6 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-
-  const API_URL = 'http://localhost:3001/api'
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -56,8 +56,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-[#EAF6F6] to-white flex items-center justify-center py-12 px-4">
-      <div className="max-w-md w-full">
+    <>
+      <NavMenu />
+      <div className="min-h-screen bg-linear-to-b from-[#EAF6F6] to-white flex items-center justify-center py-12 px-4">
+        <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-[#6EC1E4] mb-2">
             Área do Administrador
@@ -132,5 +134,6 @@ export default function Login() {
         </div>
       </div>
     </div>
+    </>
   )
 }

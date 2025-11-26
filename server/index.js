@@ -3,11 +3,17 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import mysql from 'mysql2/promise'
 import nodemailer from 'nodemailer'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3001
+
+// Necessário para usar __dirname no ES Modules
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // Criar pool de conexão MySQL
 const pool = mysql.createPool(process.env.DATABASE_URL)
@@ -248,7 +254,11 @@ function emailAgendamentoReagendado(nome, dataAntiga, horarioAntigo, dataNova, h
   `
 }
 
-app.use(cors())
+// Configurar CORS para permitir ngrok e localhost
+app.use(cors({
+  origin: true, // Permite qualquer origem (necessário para ngrok)
+  credentials: true
+}))
 app.use(express.json())
 
 // ==================== ROTAS DE ADMIN ====================
@@ -353,8 +363,15 @@ app.put('/api/cliente/atualizar', async (req, res) => {
 app.get('/api/admin/clientes', async (req, res) => {
   try {
     const [clientes] = await pool.query(
-      'SELECT id, nome, email, telefone, isAdmin, bloqueado, createdAt FROM Cliente ORDER BY createdAt DESC'
+      'SELECT id, nome, email, telefone, isAdmin, bloqueado, createdAt, fichaAnamnese FROM Cliente ORDER BY createdAt DESC'
     )
+    console.log(`\n📋 GET /api/admin/clientes - Retornando ${clientes.length} clientes`)
+    console.log(`   Clientes com ficha: ${clientes.filter(c => c.fichaAnamnese).length}`)
+    clientes.forEach(c => {
+      if (c.fichaAnamnese) {
+        console.log(`   - ${c.nome}: ${c.fichaAnamnese.length} chars`)
+      }
+    })
     res.json(clientes)
   } catch (error) {
     console.error('Erro ao buscar clientes:', error)
@@ -381,6 +398,28 @@ app.put('/api/admin/clientes/:id', async (req, res) => {
   } catch (error) {
     console.error('Erro ao atualizar cliente:', error)
     res.status(500).json({ error: 'Erro ao atualizar cliente' })
+  }
+})
+
+// Salvar ficha de anamnese
+app.put('/api/admin/clientes/:id/anamnese', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { fichaAnamnese } = req.body
+
+    if (!fichaAnamnese) {
+      return res.status(400).json({ error: 'Dados da ficha são obrigatórios' })
+    }
+
+    await pool.query(
+      'UPDATE Cliente SET fichaAnamnese = ? WHERE id = ?',
+      [fichaAnamnese, id]
+    )
+
+    res.json({ message: 'Ficha de anamnese salva com sucesso' })
+  } catch (error) {
+    console.error('Erro ao salvar ficha de anamnese:', error)
+    res.status(500).json({ error: 'Erro ao salvar ficha de anamnese' })
   }
 })
 
@@ -1181,7 +1220,7 @@ app.get('/api/horarios-disponiveis', async (req, res) => {
     const [configRows] = await pool.query(`
       SELECT chave, valor, tipo 
       FROM Configuracao 
-      WHERE chave IN ('horario_abertura', 'horario_fechamento', 'dias_funcionamento', 'dias_antecedencia_max', 'intervalo_agendamento')
+      WHERE chave IN ('horario_abertura', 'horario_fechamento', 'dias_funcionamento', 'dias_antecedencia_max', 'intervalo_agendamento', 'intervalo_almoco_ativo', 'intervalo_almoco_inicio', 'intervalo_almoco_fim')
     `)
     
     const config = {}
@@ -1190,6 +1229,8 @@ app.get('/api/horarios-disponiveis', async (req, res) => {
         config[c.chave] = JSON.parse(c.valor)
       } else if (c.tipo === 'number') {
         config[c.chave] = parseInt(c.valor)
+      } else if (c.tipo === 'boolean') {
+        config[c.chave] = c.valor === 'true'
       } else {
         config[c.chave] = c.valor
       }
@@ -1298,12 +1339,36 @@ app.get('/api/horarios-disponiveis', async (req, res) => {
     const horarioAbertura = config.horario_abertura || '08:00'
     const horarioFechamento = config.horario_fechamento || '18:00'
     const intervalo = config.intervalo_agendamento || 30
+    const intervaloAlmocoAtivo = config.intervalo_almoco_ativo === true || config.intervalo_almoco_ativo === 'true'
+    const intervaloAlmocoInicio = config.intervalo_almoco_inicio || '12:00'
+    const intervaloAlmocoFim = config.intervalo_almoco_fim || '13:00'
+    
+    console.log('[DEBUG] Configurações de almoço:', {
+      ativo: intervaloAlmocoAtivo,
+      inicio: intervaloAlmocoInicio,
+      fim: intervaloAlmocoFim
+    })
     
     const [horaAbre, minAbre] = horarioAbertura.split(':').map(Number)
     const [horaFecha, minFecha] = horarioFechamento.split(':').map(Number)
     
     const minutosAbertura = horaAbre * 60 + minAbre
     const minutosFechamento = horaFecha * 60 + minFecha
+    
+    // Converter horários de almoço para minutos
+    let minutosAlmocoInicio = 0
+    let minutosAlmocoFim = 0
+    if (intervaloAlmocoAtivo) {
+      const [horaAlmocoIni, minAlmocoIni] = intervaloAlmocoInicio.split(':').map(Number)
+      const [horaAlmocoFim, minAlmocoFim] = intervaloAlmocoFim.split(':').map(Number)
+      minutosAlmocoInicio = horaAlmocoIni * 60 + minAlmocoIni
+      minutosAlmocoFim = horaAlmocoFim * 60 + minAlmocoFim
+      
+      console.log('[DEBUG] Intervalo de almoço em minutos:', {
+        inicio: minutosAlmocoInicio,
+        fim: minutosAlmocoFim
+      })
+    }
 
     // Gerar todos os horários possíveis baseado nas configurações
     const todosHorarios = []
@@ -1317,6 +1382,24 @@ app.get('/api/horarios-disponiveis', async (req, res) => {
     const horariosComVagas = todosHorarios
       .map(horario => {
         const horariosNecessarios = calcularHorariosOcupados(horario, duracaoParaBusca)
+        
+        // Verificar se algum horário necessário cai no intervalo de almoço
+        if (intervaloAlmocoAtivo) {
+          for (const h of horariosNecessarios) {
+            const [hora, min] = h.split(':').map(Number)
+            const minutosSlot = hora * 60 + min
+            
+            // Se o horário está dentro do intervalo de almoço, não está disponível
+            if (minutosSlot >= minutosAlmocoInicio && minutosSlot < minutosAlmocoFim) {
+              console.log(`[DEBUG] Horário ${h} bloqueado - cai no intervalo de almoço`)
+              return {
+                horario,
+                vagasDisponiveis: 0,
+                totalVagas: totalColaboradores
+              }
+            }
+          }
+        }
         
         // Verificar quantas vagas estão disponíveis
         let vagasDisponiveis = totalColaboradores
@@ -1541,6 +1624,27 @@ app.post('/api/agendamentos', async (req, res) => {
   }
 })
 
+// Rota para buscar cliente por email
+app.get('/api/clientes', async (req, res) => {
+  try {
+    const { email } = req.query
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email é obrigatório' })
+    }
+
+    const [clientes] = await pool.query(
+      'SELECT id, nome, email, telefone, bloqueado, createdAt, fichaAnamnese FROM Cliente WHERE email = ?',
+      [email]
+    )
+    
+    res.json(clientes)
+  } catch (error) {
+    console.error('Erro ao buscar cliente:', error)
+    res.status(500).json({ error: 'Erro ao buscar cliente' })
+  }
+})
+
 // Rota para listar agendamentos
 app.get('/api/agendamentos', async (req, res) => {
   try {
@@ -1759,6 +1863,29 @@ app.put('/api/admin/configuracoes', async (req, res) => {
     connection.release()
   }
 })
+
+// ==================== SERVIR FRONTEND (PRODUCTION) ====================
+// IMPORTANTE: Isso deve ficar DEPOIS de todas as rotas da API
+// Em produção, serve os arquivos estáticos do build do React
+
+// Verifica se existe a pasta dist (build do frontend)
+import { existsSync } from 'fs'
+const distPath = path.join(__dirname, '..', 'dist')
+
+if (existsSync(distPath)) {
+  // Servir arquivos estáticos do frontend buildado
+  app.use(express.static(distPath))
+  
+  // Rota catch-all para SPA do React
+  // Qualquer rota que NÃO seja da API retorna o index.html
+  app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'))
+  })
+  
+  console.log('✅ Servindo frontend em modo produção')
+} else {
+  console.log('⚠️  Pasta dist não encontrada - modo desenvolvimento (frontend separado)')
+}
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`)
